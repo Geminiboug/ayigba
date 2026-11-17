@@ -1,0 +1,18 @@
+# Projet : Cotonou, quartier Cadjèhoun et aéroport (premier quartier d'essai).
+[ville]
+nom = "Cotonou"
+quartier = "Cadjèhoun / aéroport"
+pays = "Bénin"
+
+[zone]
+# Rectangle en degrés WGS84 : ouest, sud, est, nord.
+bbox = [2.372, 6.346, 2.402, 6.366]
+
+[generation]
+# Même entrée + même graine = même carte.
+graine = 20261117
+style = "defaut"
+
+[export]
+# "neutre" (glTF + GeoJSON). Les adaptateurs par moteur viendront ensuite.
+moteur = "neutre"

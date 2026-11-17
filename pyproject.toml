@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ayigba"
+version = "0.1.0"
+description = "Générateur automatique de cartes 3D fidèles à de vrais lieux, exportables vers les moteurs de jeu."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Olympe Mahougnon HOUNKPEVI" }]
+dependencies = [
+    "numpy>=1.26",
+    "shapely>=2.0",
+    "pyproj>=3.6",
+    "mapbox-earcut>=1.0",
+    "tomli>=2.0; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+ayigba = "ayigba.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

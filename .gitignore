@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# Données et produits : jamais dans le dépôt (licences des sources, taille).
+projects/*/data/
+projects/*/cache/
+projects/*/work/
+projects/*/out/
+projects/*/reports/
+projects/*/logs/
+
+# Projet Godot de vérification : fichiers générés
+verif/godot/.godot/
+verif/godot/carte/

@@ -1,0 +1,7 @@
+; Projet Godot de vérification des cartes produites par ayigba. Il ne contient aucun jeu.
+config_version=5
+
+[application]
+
+config/name="ayigba verification"
+config/features=PackedStringArray("4.7")
