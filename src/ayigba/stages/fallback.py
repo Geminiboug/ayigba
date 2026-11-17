@@ -185,6 +185,15 @@ def run(ctx) -> dict:
             found = detecter(bat, vers_local(frame, bat["epsg"]), zone, [g for g, _ in buildings], interdit)
             detected = [(g, {"id": f"g25d/{round(g.centroid.x)}_{round(g.centroid.y)}_{k}", "hauteur": None, "type": "yes", "nom": "", "toit": "",
                              "source": "google_25d"}) for k, g in enumerate(found)]
+            exclure = {str(i) for i in ctx.config.option("batiments25d", "exclure", [])}
+            if exclure:
+                # liste écrite par « ayigba controler-detections --exclure-score », seulement à la demande de l'utilisateur
+                retires = [g for g in detected if g[1]["id"] in exclure]
+                detected = [g for g in detected if g[1]["id"] not in exclure]
+                inconnus = len(exclure) - len(retires)
+                journal.record("supprime", "batiments25d", f"{len(retires)} bâtiment(s) détecté(s) exclu(s) à la demande de l'utilisateur "
+                               f"(liste « exclure » de config.toml, {len(exclure)} identifiants dont {inconnus} sans correspondance)",
+                               nombre=len(retires), identifiants_sans_correspondance=inconnus)
             buildings = buildings + detected
             if detected:
                 journal.record("genere", "batiments25d", f"{len(detected)} bâtiment(s) absent(s) d'OpenStreetMap ajouté(s) d'après la détection Google Open Buildings 2.5D "

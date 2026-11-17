@@ -39,12 +39,13 @@ Ce qui marche, vérifié sur deux lieux : Cadjèhoun à Cotonou (7,3 km², 4 302
 - **Bots dans Godot 4.7.2** : des personnages ont parcouru toutes les routes avec la physique du moteur, soit 623 routes (118,6 km) à Cadjèhoun et 602 routes (129,3 km) à Ouidah, à pied puis au gabarit d'une voiture de 1,8 m de large, sans aucun blocage ni chute.
 - **Export** : glTF (carte entière et zones), GeoJSON, routes en mètres pour le GPS, liste des décors, manifeste, fichier de crédits. Adaptateur Godot fourni.
 - **Suivi** : instantanés, comparaison avant/après, retour en arrière (`ayigba instantane`, `comparer`, `restaurer`).
-- **Reproductible** : même entrée et même graine donnent les mêmes fichiers. 196 tests automatiques.
+- **Contrôle des détections IA** : `ayigba controler-detections <projet>` calcule, sans réseau, des indices de suspicion sur les bâtiments `google_25d` (surface, allongement, hauteur, densité locale, proximité de l'eau ou d'une route, rectangularité, présence moyenne), un score simple, la liste des 20 plus suspects avec leurs coordonnées (lat, lon) et une planche de 24 vignettes (8 plus suspects, 8 au hasard, 8 plus sûrs). **Ce sont des indices de suspicion, pas la vérité terrain** : le score n'est pas une probabilité d'erreur, et ces indices ne remplacent pas une vérification sur carte ou image satellite. Voir [une planche exemple](docs/images/controle_detections_cotonou.png).
+- **Reproductible** : même entrée et même graine donnent les mêmes fichiers. 215 tests automatiques.
 
 Ce qui n'est pas fait ou pas vérifié :
 
 - relief plus fin que 30 m, arbres non retirés du relief, toits en pente, façades, bordures de trottoir, carrefours dessinés, ponts (rendus comme des remblais) ;
-- bâtiments détectés par IA non contrôlés sur le terrain (faux positifs ou fusions possibles) ;
+- bâtiments détectés par IA non contrôlés sur le terrain (faux positifs ou fusions possibles) : l'outil sait les trier par indices de suspicion, mais leur exactitude réelle n'est pas mesurée ;
 - bots hors des routes, navmesh, vrai véhicule à roues ;
 - adaptateurs Unity et Unreal : écrits mais jamais testés, faute de moteur disponible ;
 - interface graphique, IA de style, édition manuelle ;
@@ -75,7 +76,15 @@ python3 -m venv .venv
 # Garder un résultat, comparer, revenir en arrière
 .venv/bin/ayigba instantane projects/ouidah-benin --nom avant-essai
 .venv/bin/ayigba comparer projects/ouidah-benin
+
+# Contrôler les bâtiments détectés par IA (hors ligne, indices de suspicion, pas la vérité terrain)
+.venv/bin/ayigba controler-detections projects/ouidah-benin
+# Facultatif : inscrire dans config.toml les détections de score >= 6 à exclure ; rien n'est exclu sans cette option,
+# et l'exclusion ne s'applique qu'à la prochaine génération (le nombre exclu est journalisé dans logs/decisions.jsonl)
+.venv/bin/ayigba controler-detections projects/ouidah-benin --exclure-score 6
 ```
+
+Le contrôle écrit `reports/controle_detections.json` (indicateurs, 20 plus suspects avec lat, lon et lien de carte), `reports/controle_detections.txt`, la planche `reports/controle_detections.png` et les vignettes dans `reports/controle_detections/`.
 
 Résultat dans `projects/<projet>/out/neutre/` : `carte.glb` (carte entière), `zones/` et `zones.json` (zones chargeables), `routes.geojson`, `routes_local.json`, `batiments.geojson`, `points_interet.geojson`, `decors.geojson`, `manifeste.json`, `CREDITS.md`. Le rapport de qualité est dans `reports/qualite.md` et le journal des décisions dans `logs/decisions.jsonl`.
 

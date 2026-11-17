@@ -5,6 +5,7 @@
   ayigba instantane projects/ouidah-benin          garde une copie du résultat
   ayigba comparer projects/ouidah-benin            compare le résultat courant au dernier instantané
   ayigba restaurer projects/ouidah-benin 1         revient à un instantané
+  ayigba controler-detections projects/ouidah-benin   indices de suspicion sur les bâtiments détectés par IA
 """
 from __future__ import annotations
 
@@ -48,6 +49,12 @@ def main(argv: list[str] | None = None) -> int:
     back.add_argument("projet", type=Path)
     back.add_argument("numero", type=int)
 
+    ctl = sub.add_parser("controler-detections", help="indices de suspicion sur les bâtiments détectés par IA (sans réseau, pas une vérité terrain)")
+    ctl.add_argument("projet", type=Path)
+    ctl.add_argument("--sans-images", action="store_true", help="ne pas produire la planche et les vignettes PNG")
+    ctl.add_argument("--exclure-score", type=int, metavar="X",
+                     help="écrit dans config.toml les identifiants de score >= X à exclure à la prochaine génération (rien n'est exclu sans cette option)")
+
     sub.add_parser("etapes", help="liste les étapes du pipeline")
     args = parser.parse_args(argv)
 
@@ -63,6 +70,20 @@ def main(argv: list[str] | None = None) -> int:
             if results.get("tests", {}).get("erreurs"):
                 print(f"Attention : le rapport de qualité contient {results['tests']['erreurs']} erreur(s). Voir {ctx.project.reports / 'qualite.md'}", file=sys.stderr)
                 return 2
+        elif args.commande == "controler-detections":
+            from . import controle
+            rap = controle.controler(Project(args.projet.resolve()), sans_images=args.sans_images, exclure_score=args.exclure_score)
+            print(rap["_texte"])
+            racine = Path(args.projet)
+            print(f"\nRapport : {racine / 'reports' / 'controle_detections.json'}")
+            if rap["_images"]:
+                print(f"Planche : {rap['_images']}")
+            if args.exclure_score is not None:
+                if rap["_exclus_total"] is None:
+                    print(f"Aucun bâtiment de score >= {args.exclure_score} : config.toml inchangé.")
+                else:
+                    print(f"{rap['_exclus_nouveaux']} identifiant(s) ajouté(s) à [batiments25d] exclure dans {racine / 'config.toml'} "
+                          f"({rap['_exclus_total']} au total). Relance « ayigba generer {racine} » pour les retirer ; le nombre sera journalisé.")
         else:
             project = Project(args.projet.resolve())
             if args.commande == "instantane":
