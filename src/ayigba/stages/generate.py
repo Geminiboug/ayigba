@@ -152,6 +152,8 @@ def run(ctx) -> dict:
     mesure = batiments25d.Hauteurs(bat25) if bat25 is not None else None
     to_data = vers_donnees(frame, bat25["epsg"]) if bat25 is not None else None
     measured = 0
+    pitched = 0
+    pitched_share = float(ctx.config.option("toits", "part_deux_pentes", 0.6)) if bool(ctx.config.option("toits", "actif", True)) else 0.0
     bati = MeshBuilder("batiments")
     estimated = 0
     final_buildings = []
@@ -190,10 +192,23 @@ def run(ctx) -> dict:
             final_buildings.append((geom, {**props, "hauteur": height, "hauteur_source": source_h, "base": round(low - 0.3, 2), "sommet": round(top, 2)}))
             continue
         top = high + height
+        # toit à deux pentes : choix de style (les données ne disent pas la forme des toits), seulement pour les petits bâtiments
+        # presque rectangulaires ; tirage lié à la graine, donc reproductible
+        gable = pitched_share > 0.0 and height <= 9.0 and 25.0 <= geom.area <= 500.0 and rng_for(seed, props["id"] + "/toit").random() < pitched_share
+        ridge = None
         for part in _polygons(geom):
-            bati.add_prism(part, low - 0.3, top, wall, roof)
-        final_buildings.append((geom, {**props, "hauteur": height, "hauteur_source": source_h, "base": round(low - 0.3, 2), "sommet": round(top, 2)}))
-    finish(bati, True, "volumes des bâtiments, toits plats, posés sur le relief")
+            r = bati.add_gable_prism(part, low - 0.3, top, wall, roof) if gable else None
+            if r is None:
+                bati.add_prism(part, low - 0.3, top, wall, roof)
+            else:
+                ridge = r
+        if ridge is not None:
+            pitched += 1
+        final_buildings.append((geom, {**props, "hauteur": height, "hauteur_source": source_h, "base": round(low - 0.3, 2), "sommet": round(top, 2),
+                                       **({"toit": "deux_pentes", "faitage_m": round(ridge, 2)} if ridge is not None else {})}))
+    finish(bati, True, "volumes des bâtiments (toits plats ou à deux pentes), posés sur le relief")
+    if pitched:
+        ctx.journal.record("genere", "batiments", f"toit à deux pentes ajouté à {pitched} bâtiment(s) presque rectangulaires (choix de style tiré selon la graine, part {pitched_share:.0%}) : la forme réelle des toits n'est pas dans les données")
     write_features(out / "buildings.geojson", final_buildings)
     if measured:
         ctx.journal.record("info", "batiments", f"hauteur mesurée par Google Open Buildings 2.5D pour {measured} bâtiment(s) (médiane des pixels sous l'emprise)")
@@ -223,5 +238,5 @@ def run(ctx) -> dict:
     return {
         "triangles": sum(layer["triangles"] for layer in layers),
         "couches": {layer["nom"]: layer["triangles"] for layer in layers},
-        "batiments": len(buildings), "hauteurs_estimees": estimated, "hauteurs_mesurees_25d": measured, "decors": len(items), "altitudes_m": relief,
+        "batiments": len(buildings), "toits_deux_pentes": pitched, "hauteurs_estimees": estimated, "hauteurs_mesurees_25d": measured, "decors": len(items), "altitudes_m": relief,
     }

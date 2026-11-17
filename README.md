@@ -23,7 +23,7 @@ La cohérence passe avant la fidélité à 100 %. Une carte sans trou, sans mur 
 
 L'outil est indépendant de tout jeu : il ne contient ni missions, ni météo, ni scénario. Il produit une carte et ses données, c'est tout.
 
-## État actuel (version 0.5, 17/11/2026)
+## État actuel (version 0.6, 17/11/2026)
 
 Ce qui marche, vérifié sur deux lieux : Cadjèhoun à Cotonou (7,3 km², 4 302 bâtiments, altitudes de 0.0 à 8.41 m) et Ouidah (8,9 km², 7 985 bâtiments, altitudes de 2.67 à 24.04 m).
 
@@ -44,7 +44,7 @@ Ce qui marche, vérifié sur deux lieux : Cadjèhoun à Cotonou (7,3 km², 4 302
 
 Ce qui n'est pas fait ou pas vérifié :
 
-- relief plus fin que 30 m, arbres non retirés du relief, toits en pente, façades, bordures de trottoir, carrefours dessinés, ponts (rendus comme des remblais) ;
+- relief plus fin que 30 m, arbres non retirés du relief, toits autres qu'à deux pentes (les petits bâtiments rectangulaires ont un toit à deux pentes par choix de style, réglable dans `[toits]`), façades, bordures de trottoir, carrefours dessinés, ponts (rendus comme des remblais) ;
 - bâtiments détectés par IA non contrôlés sur le terrain (faux positifs ou fusions possibles) : l'outil sait les trier par indices de suspicion, mais leur exactitude réelle n'est pas mesurée ;
 - bots hors des routes, navmesh, vrai véhicule à roues ;
 - adaptateurs Unity et Unreal : écrits mais jamais testés, faute de moteur disponible ;

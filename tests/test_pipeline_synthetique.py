@@ -256,3 +256,12 @@ def test_reprise_ne_refait_rien(tmp_path):
     lancer(d, echo=lambda m, *_: messages.append(str(m)))
     assert messages
     assert all("déjà fait" in m for m in messages)
+
+
+def test_toits_desactives_donne_zero_toit_a_deux_pentes(tmp_path):
+    dossier = ecrire_projet(tmp_path / "sans-toits", ville_de_base())
+    cfg = dossier / "config.toml"
+    cfg.write_text(cfg.read_text(encoding="utf-8") + "\n[toits]\nactif = false\n", encoding="utf-8")
+    resultats = lancer(dossier)
+    assert "toits_deux_pentes" in resultats["generation"]
+    assert resultats["generation"]["toits_deux_pentes"] == 0
