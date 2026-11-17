@@ -14,14 +14,14 @@ Chaque étape est un module de `src/ayigba/stages/` qui expose `run(ctx) -> dict
 |---|---|---|---|
 | collecte | `collect.py` | API Overpass | `cache/osm_overpass.json`, `data/sources.json` |
 | nettoyage | `clean.py` | le cache | `work/nettoyage/*.geojson` |
-| relief | `relief.py` | API Copernicus (tuile de 1 degré, cache) | `cache/dem_copernicus.npz`, `work/relief/info.json` |
+| relief | `relief.py` | Copernicus (tuiles de 1 degré) et Open Buildings 2.5D, en cache | `cache/dem_copernicus.npz`, `work/relief/info.json` |
 | secours | `fallback.py` | nettoyage | `work/secours/roads.geojson`, `buildings.geojson` (réel + généré) |
 | generation | `generate.py` | nettoyage, secours | `work/generation/*.npz`, `sol.geojson`, `buildings.geojson`, `decors.geojson`, `scene.json` |
 | tests | `validate.py` | secours, generation | `reports/qualite.json`, `reports/qualite.md` |
 | optimisation | `optimize.py` | generation | `work/optimisation/zones.json`, `zones/*.npz` |
 | export | `export.py` | tout | `out/neutre/*` |
 
-Modules communs : `dem.py` (modèle d'altitude : téléchargement, cache, enveloppe basse, lissage, interpolation), `terrain.py` (maillage conforme du sol drapé sur le relief), `access.py` (accessibilité à pied sur les formes exactes), `decor.py` et `props.py` (placement et formes des décors), `mesh.py` et `gltf.py` (maillages et écriture glTF), `geocode.py` (projet à partir d'un nom), `history.py` (instantanés et comparaison).
+Modules communs : `batiments25d.py` (Google Open Buildings 2.5D : tuiles, cache, hauteur par emprise), `sol_nu.py` (retire la hauteur des toits du relief), `detection.py` (bâtiments absents d'OSM d'après la présence 2.5D), `dem.py` (modèle d'altitude : téléchargement, cache, enveloppe basse, lissage, interpolation), `terrain.py` (maillage conforme du sol drapé sur le relief), `access.py` (accessibilité à pied sur les formes exactes), `decor.py` et `props.py` (placement et formes des décors), `mesh.py` et `gltf.py` (maillages et écriture glTF), `geocode.py` (projet à partir d'un nom), `history.py` (instantanés et comparaison).
 
 Le secours passe avant la génération des maillages : les éléments générés suivent ainsi exactement le même chemin (maillages, contrôles, export) que les données réelles.
 

@@ -23,7 +23,8 @@ from ..mesh import MeshBuilder, rng_for
 from ..props import CATALOGUE, place
 from ..terrain import BED_DEPTH, build_ground, shore_walls
 from .clean import _polygons
-from .relief import altitudes
+from .. import batiments25d
+from .relief import altitudes, batiments, vers_donnees
 
 STAGE = "generation"
 
@@ -147,6 +148,10 @@ def run(ctx) -> dict:
 
     road_all = unary_union([g for g in (paved_part, unpaved_part) if not g.is_empty])
     road_all = None if road_all.is_empty else road_all
+    bat25 = batiments(ctx)
+    mesure = batiments25d.Hauteurs(bat25) if bat25 is not None else None
+    to_data = vers_donnees(frame, bat25["epsg"]) if bat25 is not None else None
+    measured = 0
     bati = MeshBuilder("batiments")
     estimated = 0
     final_buildings = []
@@ -154,6 +159,12 @@ def run(ctx) -> dict:
         rng = rng_for(seed, props["id"])
         height = props.get("hauteur")
         source_h = "osm"
+        if height is None and mesure is not None:
+            h = mesure.pour_emprise(to_data(geom))
+            if h is not None:
+                height = round(min(max(float(h), 2.4), 100.0), 2)
+                source_h = "google_25d"
+                measured += 1
         if height is None:
             height = _estimate_height(rng, geom.area, props.get("type", "yes"))
             source_h = "genere"
@@ -184,6 +195,8 @@ def run(ctx) -> dict:
         final_buildings.append((geom, {**props, "hauteur": height, "hauteur_source": source_h, "base": round(low - 0.3, 2), "sommet": round(top, 2)}))
     finish(bati, True, "volumes des bâtiments, toits plats, posés sur le relief")
     write_features(out / "buildings.geojson", final_buildings)
+    if measured:
+        ctx.journal.record("info", "batiments", f"hauteur mesurée par Google Open Buildings 2.5D pour {measured} bâtiment(s) (médiane des pixels sous l'emprise)")
     if estimated:
         ctx.journal.record("genere", "batiments", f"hauteur estimée pour {estimated} bâtiment(s) sans hauteur dans OSM (règle par surface, tirage lié à la graine)")
 
@@ -210,5 +223,5 @@ def run(ctx) -> dict:
     return {
         "triangles": sum(layer["triangles"] for layer in layers),
         "couches": {layer["nom"]: layer["triangles"] for layer in layers},
-        "batiments": len(buildings), "hauteurs_estimees": estimated, "decors": len(items), "altitudes_m": relief,
+        "batiments": len(buildings), "hauteurs_estimees": estimated, "hauteurs_mesurees_25d": measured, "decors": len(items), "altitudes_m": relief,
     }

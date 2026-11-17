@@ -76,9 +76,53 @@ def test_telecharger_une_tuile(tmp_path):
     assert float(dem2["altitudes"].max()) == 0.0 and float(dem2["altitudes"].min()) == 0.0
 
 
-def test_telecharger_deux_tuiles():
-    with pytest.raises(NotImplementedError):
-        D.telecharger((2.9995, 6.3, 3.1, 6.4), ouvrir=lambda u: None)
+def _tif_at(chemin, valeur, ouest, nord, pas=0.001, n=1000):
+    with rasterio.open(chemin, "w", driver="GTiff", height=n, width=n, count=1, dtype="float32",
+                       crs="EPSG:4326", transform=from_origin(ouest, nord, pas, pas)) as ds:
+        ds.write(np.full((n, n), valeur, dtype="float32"), 1)
+    return chemin
+
+
+def _ouvreur(fichiers):
+    table = {D.tuile_url(la, lo): f for (la, lo), f in fichiers.items()}
+    return lambda url: rasterio.open(table[url])
+
+
+def test_telecharger_deux_tuiles(tmp_path):
+    ouest = _tif_at(tmp_path / "o.tif", 1.0, 2.0, 7.0)
+    est = _tif_at(tmp_path / "e.tif", 2.0, 3.0, 7.0)
+    dem = D.telecharger((2.9995, 6.3, 3.1, 6.4), ouvrir=_ouvreur({(6, 2): ouest, (6, 3): est}))
+    a = dem["altitudes"]
+    assert a.dtype == np.float32
+    assert dem["pas"] == pytest.approx(0.001)
+    assert dem["ouest"] == pytest.approx(2.996)
+    assert dem["nord"] == pytest.approx(6.403)
+    assert a.shape == (106, 107)
+    assert not (a == 0).any()
+    assert (a[:, :4] == 1).all() and (a[:, 4:] == 2).all()
+
+
+def test_telecharger_quatre_tuiles(tmp_path):
+    f = {
+        (6, 2): _tif_at(tmp_path / "a.tif", 1.0, 2.0, 7.0),
+        (6, 3): _tif_at(tmp_path / "b.tif", 2.0, 3.0, 7.0),
+        (7, 2): _tif_at(tmp_path / "c.tif", 3.0, 2.0, 8.0),
+        (7, 3): _tif_at(tmp_path / "d.tif", 4.0, 3.0, 8.0),
+    }
+    dem = D.telecharger((2.9995, 6.9995, 3.001, 7.001), ouvrir=_ouvreur(f))
+    a = dem["altitudes"]
+    assert dem["pas"] == pytest.approx(0.001)
+    assert dem["ouest"] == pytest.approx(2.996)
+    assert dem["nord"] == pytest.approx(7.004)
+    assert not (a == 0).any()
+    assert a[0, 0] == 3.0 and a[0, -1] == 4.0 and a[-1, 0] == 1.0 and a[-1, -1] == 2.0
+
+
+def test_telecharger_pas_differents(tmp_path):
+    ouest = _tif_at(tmp_path / "o.tif", 1.0, 2.0, 7.0, pas=0.001)
+    est = _tif_at(tmp_path / "e.tif", 2.0, 3.0, 7.0, pas=0.002, n=500)
+    with pytest.raises(RuntimeError):
+        D.telecharger((2.9995, 6.3, 3.1, 6.4), ouvrir=_ouvreur({(6, 2): ouest, (6, 3): est}))
 
 
 def test_aller_retour(tmp_path):

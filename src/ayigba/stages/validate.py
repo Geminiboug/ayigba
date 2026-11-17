@@ -155,6 +155,7 @@ def run(ctx) -> dict:
         "zone_km2": round(zone.area / 1e6, 3), "triangles": triangles, "pente_max_deg": round(steepest, 1),
         "altitudes_m": scene.get("altitudes"),
         "batiments": len(buildings), "hauteurs_estimees": sum(1 for _, p in buildings if p.get("hauteur_source") == "genere"),
+        "hauteurs_par_source": {s: sum(1 for _, p in buildings if p.get("hauteur_source") == s) for s in ("osm", "google_25d", "genere")},
         "routes": len(roads), "routes_km": round(sum(g.length for g, _ in roads) / 1000.0, 2),
         "elements_par_source": {"osm": b_src["osm"] + r_src["osm"], "genere": b_src["genere"] + r_src["genere"]},
         "batiments_par_source": b_src, "routes_par_source": r_src,

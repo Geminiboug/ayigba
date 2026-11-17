@@ -15,7 +15,7 @@ Priorité au Bénin : Cotonou d'abord, puis Ouidah, Porto-Novo et Parakou.
 
 ![Ouidah vue depuis le bas de la ville dans Godot](docs/images/ouidah_vue_basse.png)
 
-*Ouidah dans Godot, à l'échelle réelle. Données : © les contributeurs d'OpenStreetMap (ODbL) ; contient des données Copernicus.*
+*Ouidah dans Godot, à l'échelle réelle. Données : © les contributeurs d'OpenStreetMap (ODbL) ; contient des données Copernicus ; Google Open Buildings 2.5D (CC BY 4.0).*
 
 ## Principe
 
@@ -23,7 +23,7 @@ La cohérence passe avant la fidélité à 100 %. Une carte sans trou, sans mur 
 
 L'outil est indépendant de tout jeu : il ne contient ni missions, ni météo, ni scénario. Il produit une carte et ses données, c'est tout.
 
-## État actuel (version 0.4, 17/11/2026)
+## État actuel (version 0.5, 17/11/2026)
 
 Ce qui marche, vérifié sur deux lieux : Cadjèhoun à Cotonou (7,3 km², 4 302 bâtiments, altitudes de 0.0 à 8.41 m) et Ouidah (8,9 km², 7 985 bâtiments, altitudes de 2.67 à 24.04 m).
 
@@ -31,19 +31,20 @@ Ce qui marche, vérifié sur deux lieux : Cadjèhoun à Cotonou (7,3 km², 4 302
 - **Collecte** OpenStreetMap avec cache : tout fonctionne hors ligne après le premier téléchargement.
 - **Nettoyage** : routes recollées, carrefours manquants créés, doublons et chevauchements retirés, rues rétrécies entre les murs, passages couverts ouverts, mer déduite du trait de côte.
 - **Secours** : routes isolées reliées ou retirées, îlots vides remplis de bâtiments cohérents avec leurs voisins, cours fermées comblées. Tout ce qui est généré est marqué `source = genere`.
-- **Relief** : modèle d'altitude Copernicus (30 m, libre), téléchargé et mis en cache. Une enveloppe basse locale retire les bosses dues aux bâtiments et aux arbres. Sol triangulé d'un seul tenant et drapé sur le relief, sans fissure : terre, chaussées, trottoirs et eau partagent leurs sommets.
+- **Bâtiments manquants et vraies hauteurs** : OpenStreetMap ne couvre qu'une partie des bâtiments du Bénin. Les données libres Google Open Buildings 2.5D (2023) ajoutent les bâtiments absents (3 108 à Cadjèhoun, 6 816 à Ouidah) et donnent une hauteur mesurée à la plupart des bâtiments. Ce sont des détections par IA, marquées comme telles.
+- **Relief** : modèle d'altitude Copernicus (30 m, libre), téléchargé et mis en cache. La hauteur moyenne des toits est retirée du relief (« sol nu »), avec des garde-fous ; une enveloppe basse atténue les arbres. Sol triangulé d'un seul tenant et drapé sur le relief, sans fissure : terre, chaussées, trottoirs et eau partagent leurs sommets.
 - **Génération 3D** : bâtiments posés sur le relief, auvents, eau à son niveau propre avec berges, décors légers (arbres, poteaux, lampadaires, étals). Sens de circulation et densité de zems exportés comme données.
 - **Optimisation** : zones de 250 m chargeables à la demande, deux niveaux de détail, budget de triangles par zone (au plus 4 452 triangles de près dans une zone, pour un budget de 15 000).
 - **Contrôles** : rapport de qualité avec 0 erreur et 0 avertissement sur les deux lieux ; 100 % de la surface libre accessible à pied.
 - **Bots dans Godot 4.7.2** : des personnages ont parcouru toutes les routes avec la physique du moteur, soit 623 routes (118,6 km) à Cadjèhoun et 602 routes (129,3 km) à Ouidah, à pied puis au gabarit d'une voiture de 1,8 m de large, sans aucun blocage ni chute.
 - **Export** : glTF (carte entière et zones), GeoJSON, routes en mètres pour le GPS, liste des décors, manifeste, fichier de crédits. Adaptateur Godot fourni.
 - **Suivi** : instantanés, comparaison avant/après, retour en arrière (`ayigba instantane`, `comparer`, `restaurer`).
-- **Reproductible** : même entrée et même graine donnent les mêmes fichiers. 162 tests automatiques.
+- **Reproductible** : même entrée et même graine donnent les mêmes fichiers. 196 tests automatiques.
 
 Ce qui n'est pas fait ou pas vérifié :
 
-- relief plus fin que 30 m (le modèle est un modèle de surface : les grands quartiers denses restent surélevés de quelques mètres), toits en pente, façades, bordures de trottoir, carrefours dessinés, ponts (rendus comme des remblais) ;
-- sources autres qu'OpenStreetMap : presque toutes les hauteurs de bâtiments sont estimées ;
+- relief plus fin que 30 m, arbres non retirés du relief, toits en pente, façades, bordures de trottoir, carrefours dessinés, ponts (rendus comme des remblais) ;
+- bâtiments détectés par IA non contrôlés sur le terrain (faux positifs ou fusions possibles) ;
 - bots hors des routes, navmesh, vrai véhicule à roues ;
 - adaptateurs Unity et Unreal : écrits mais jamais testés, faute de moteur disponible ;
 - interface graphique, IA de style, édition manuelle ;

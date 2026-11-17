@@ -25,6 +25,8 @@ from shapely.geometry import LineString, Point, box
 from shapely.ops import nearest_points, polygonize, unary_union
 
 from ..access import analyse, polygons
+from ..detection import detecter
+from .relief import batiments, vers_local
 from ..geo import LocalFrame, read_features, write_features
 from ..mesh import rng_for
 
@@ -171,10 +173,24 @@ def run(ctx) -> dict:
     extra = {"repere": {"epsg": frame.epsg, "lon0": frame.lon0, "lat0": frame.lat0, "unite": "metre", "axes": "x est, y nord"}}
 
     links = removed = filled = courtyards = 0
+    detected = []
     wet = 0
     if active:
         solids = [g for g, p in buildings if p.get("type") != "roof"]
         roads, links, removed = _connect_isolated(roads, STRtree(solids) if solids else None, solids, water, journal)
+
+        bat = batiments(ctx)
+        if bat is not None and bool(ctx.config.option("batiments25d", "detecter", True)):
+            interdit = unary_union([g.buffer(p["largeur"] / 2.0 + 0.5) for g, p in roads if not p["tunnel"]] + ([water] if water is not None else []))
+            found = detecter(bat, vers_local(frame, bat["epsg"]), zone, [g for g, _ in buildings], interdit)
+            detected = [(g, {"id": f"g25d/{round(g.centroid.x)}_{round(g.centroid.y)}_{k}", "hauteur": None, "type": "yes", "nom": "", "toit": "",
+                             "source": "google_25d"}) for k, g in enumerate(found)]
+            buildings = buildings + detected
+            if detected:
+                journal.record("genere", "batiments25d", f"{len(detected)} bâtiment(s) absent(s) d'OpenStreetMap ajouté(s) d'après la détection Google Open Buildings 2.5D "
+                               f"({sum(g.area for g, _ in detected) / 1e4:.1f} ha)", nombre=len(detected))
+        else:
+            detected = []
 
         new = _fill_blocks(zone, roads, buildings, landuse, surfaces, water, ctx.config.seed, journal,
                            float(ctx.config.option("secours", "densite_ilot_vide", 0.0)))
@@ -211,5 +227,5 @@ def run(ctx) -> dict:
     buildings = sorted(buildings, key=lambda b: b[1]["id"])
     write_features(out / "roads.geojson", [(g, p) for g, p in roads], extra=extra)
     write_features(out / "buildings.geojson", buildings, extra=extra)
-    return {"liens_crees": links, "routes_isolees_retirees": removed, "batiments_generes": filled, "poches_comblees": courtyards,
+    return {"batiments_detectes": len(detected) if active else 0, "liens_crees": links, "routes_isolees_retirees": removed, "batiments_generes": filled, "poches_comblees": courtyards,
             "terrains_bordes_eau": wet, "elements_generes": links + filled + courtyards}

@@ -1,7 +1,6 @@
 """Modèle numérique d'altitude : Copernicus DEM GLO-30 (30 m), cache et altitude en tout point du repère local.
 
-LISEZMOI, limite connue : une zone à cheval sur plusieurs tuiles de 1 degré n'est pas encore gérée
-(`telecharger` lève NotImplementedError). Une seule tuile par zone pour l'instant.
+Une zone à cheval sur 2 ou 4 tuiles de 1 degré est assemblée en une seule grille régulière (même pas exigé).
 """
 from __future__ import annotations
 
@@ -57,31 +56,55 @@ def tuiles_pour(bbox) -> list[tuple[int, int]]:
 
 
 def telecharger(bbox, ouvrir=rasterio.open) -> dict:
-    """Lit la fenêtre de la zone dans la tuile (une seule tuile gérée) et renvoie le dem."""
-    tuiles = tuiles_pour(bbox)
-    if len(tuiles) > 1:
-        raise NotImplementedError("zone à cheval sur plusieurs tuiles : pas encore gérée")
-    lat0, lon0 = tuiles[0]
+    """Lit la fenêtre de la zone dans chaque tuile couverte et les assemble en une grille régulière.
+
+    Toutes les tuiles doivent avoir le même pas (sinon RuntimeError). Au recouvrement, la première tuile (ordre trié)
+    l'emporte ; les pixels non couverts valent 0.0."""
     ouest, sud, est, nord = bbox
-    url = tuile_url(lat0, lon0)
-    with ouvrir(url) as ds:
-        fen = rasterio.windows.from_bounds(
-            ouest - MARGE_FENETRE, sud - MARGE_FENETRE, est + MARGE_FENETRE, nord + MARGE_FENETRE, transform=ds.transform
-        )
-        fen = fen.round_offsets(op="floor").round_lengths(op="ceil")
-        tableau = ds.read(1, window=fen).astype(np.float32)
-        transform = rasterio.windows.transform(fen, ds.transform)
-        nodata = ds.nodata
-    masque = ~np.isfinite(tableau)
-    if nodata is not None and np.isfinite(nodata):
-        masque |= tableau == np.float32(nodata)
-    tableau[masque] = 0.0
-    return {
-        "altitudes": tableau,
-        "ouest": float(transform.c),
-        "nord": float(transform.f),
-        "pas": float(transform.a),
-    }
+    morceaux = []  # (tableau, ouest, nord, pas)
+    for lat0, lon0 in tuiles_pour(bbox):
+        with ouvrir(tuile_url(lat0, lon0)) as ds:
+            fen = rasterio.windows.from_bounds(
+                ouest - MARGE_FENETRE, sud - MARGE_FENETRE, est + MARGE_FENETRE, nord + MARGE_FENETRE,
+                transform=ds.transform,
+            )
+            fen = fen.round_offsets(op="floor").round_lengths(op="ceil")
+            if len(tuiles_pour(bbox)) > 1:
+                try:
+                    fen = fen.intersection(rasterio.windows.Window(0, 0, ds.width, ds.height))
+                except rasterio.errors.WindowError:
+                    continue
+            tableau = ds.read(1, window=fen).astype(np.float32)
+            transform = rasterio.windows.transform(fen, ds.transform)
+            nodata = ds.nodata
+        masque = ~np.isfinite(tableau)
+        if nodata is not None and np.isfinite(nodata):
+            masque |= tableau == np.float32(nodata)
+        tableau[masque] = 0.0
+        morceaux.append((tableau, float(transform.c), float(transform.f), float(transform.a)))
+    if not morceaux:
+        raise RuntimeError("aucune tuile ne couvre la zone")
+    pas = morceaux[0][3]
+    for _, _, _, p in morceaux:
+        if not math.isclose(p, pas, rel_tol=1e-9):
+            raise RuntimeError(f"pas différents entre tuiles ({pas} et {p}) : assemblage impossible")
+    if len(morceaux) == 1:
+        t, o, n, p = morceaux[0]
+        return {"altitudes": t, "ouest": o, "nord": n, "pas": p}
+    o_grille = min(m[1] for m in morceaux)
+    n_grille = max(m[2] for m in morceaux)
+    cols = max(int(round((m[1] - o_grille) / pas)) + m[0].shape[1] for m in morceaux)
+    lignes = max(int(round((n_grille - m[2]) / pas)) + m[0].shape[0] for m in morceaux)
+    grille = np.zeros((lignes, cols), dtype=np.float32)
+    rempli = np.zeros((lignes, cols), dtype=bool)
+    for t, o, n, _ in morceaux:
+        c = int(round((o - o_grille) / pas))
+        r = int(round((n_grille - n) / pas))
+        h, w = t.shape
+        libre = ~rempli[r:r + h, c:c + w]
+        grille[r:r + h, c:c + w][libre] = t[libre]
+        rempli[r:r + h, c:c + w] = True
+    return {"altitudes": grille, "ouest": o_grille, "nord": n_grille, "pas": pas}
 
 
 def enregistrer(chemin, dem: dict) -> None:

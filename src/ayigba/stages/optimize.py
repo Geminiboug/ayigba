@@ -27,7 +27,8 @@ from .clean import _polygons
 STAGE = "optimisation"
 FAR_MIN_AREA = 60.0
 FAR_LAYER = "batiments_loin"
-NEAR_ONLY = ("batiments", "decors")  # couches visibles seulement de près
+NEAR_ONLY = ("batiments", "decors")
+SIMPLIFY_M = 1.5  # couches visibles seulement de près
 
 
 def run(ctx) -> dict:
@@ -74,9 +75,29 @@ def run(ctx) -> dict:
     for cell, builder in far.items():
         per_zone.setdefault(cell, {})[FAR_LAYER] = (builder.triangles, builder.colors)
 
+    # dernier recours pour une zone trop lourde : des bâtiments au contour simplifié (1,5 m), qui reste collé à l'emprise
+    # réelle (jamais de rectangle englobant : il pourrait mordre sur une rue et bloquer le passage)
+    def simple_buildings(cell: int):
+        b = MeshBuilder("batiments")
+        for geom, props in buildings_by_cell.get(cell, []):
+            top = float(props.get("sommet", props["hauteur"]))
+            base = float(props.get("base", 0.0))
+            for part in _polygons(geom.simplify(SIMPLIFY_M, preserve_topology=True)):
+                if props.get("type") == "roof":
+                    b.add_prism(part, top - 0.25, top, (0.52, 0.50, 0.50), (0.52, 0.50, 0.50))
+                    b.add_flat_down(part, top - 0.25, (0.52, 0.50, 0.50))
+                else:
+                    b.add_prism(part, base, top, (0.80, 0.76, 0.68), (0.52, 0.50, 0.50))
+        return b.triangles, b.colors
+
+    buildings_by_cell: dict[int, list] = {}
+    for geom, props in read_features(gen / "buildings.geojson"):
+        c = geom.centroid
+        buildings_by_cell.setdefault(int(cell_of(np.array([c.x]), np.array([c.y]))[0]), []).append((geom, props))
+
     collisions = {layer["nom"]: layer["collision"] for layer in scene["couches"]}
     index = []
-    over = stripped = 0
+    over = stripped = simplified = 0
     for cell in sorted(per_zone):
         j, i = divmod(cell, nx)
         name = f"z_{i:02d}_{j:02d}"
@@ -87,6 +108,12 @@ def run(ctx) -> dict:
             del layers["decors"]
             stripped += 1
             ctx.journal.record("corrige", f"zone/{name}", f"budget de {budget} triangles dépassé : décors retirés de cette zone")
+        if near > budget and "batiments" in layers:
+            t_old = len(layers["batiments"][0])
+            layers["batiments"] = simple_buildings(cell)
+            near += len(layers["batiments"][0]) - t_old
+            simplified += 1
+            ctx.journal.record("corrige", f"zone/{name}", f"budget de {budget} triangles encore dépassé : contours des bâtiments simplifiés à {SIMPLIFY_M} m dans cette zone")
         if near > budget:
             over += 1
             ctx.journal.record("signale", f"zone/{name}", f"{near} triangles de près pour un budget de {budget}")
@@ -106,4 +133,4 @@ def run(ctx) -> dict:
     (out / "zones.json").write_text(json.dumps(doc, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
     near_all = [z["triangles_pres"] for z in index]
     return {"zones": len(index), "taille_zone_m": size, "triangles_max_pres": max(near_all) if near_all else 0,
-            "triangles_moyens_pres": int(np.mean(near_all)) if near_all else 0, "zones_hors_budget": over, "zones_sans_decors": stripped}
+            "triangles_moyens_pres": int(np.mean(near_all)) if near_all else 0, "zones_hors_budget": over, "zones_sans_decors": stripped, "zones_simplifiees": simplified}
