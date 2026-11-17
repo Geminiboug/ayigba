@@ -1,6 +1,6 @@
 extends SceneTree
 ## Bots dans le moteur : des personnages parcourent les routes de la carte avec la physique de Godot.
-##   Godot --headless --path verif/godot --script res://bots_routes.gd -- export=<dossier out/neutre> [routes=200] [bots=24] [rapport=<fichier.json>]
+##   Godot --headless --path verif/godot --script res://bots_routes.gd -- export=<dossier out/neutre> [routes=200] [bots=24] [gabarit=pieton|vehicule] [rapport=<fichier.json>]
 ## La carte est chargée zone par zone avec l'adaptateur (res://ayigba_carte.gd), toutes zones chargées, collisions créées.
 ## Un bot « bloque » révèle un mur invisible ou un obstacle sur une route ; une « chute » révèle un trou.
 ## routes=0 : toutes les routes. Code de sortie 0 si aucun défaut, 1 sinon.
@@ -47,6 +47,9 @@ func _lancer() -> void:
 	var voulu := int(_arg("routes", "200"))
 	var pas := 1 if voulu <= 0 else maxi(1, int(ceil(float(toutes.size()) / voulu)))
 	var choisies: Array = []
+	var vehicule := _arg("gabarit", "pieton") == "vehicule"
+	if vehicule:   # un véhicule ne prend que les routes carrossables
+		toutes = toutes.filter(func(r): return not r["pieton"])
 	for k in range(0, toutes.size(), pas):
 		var pts := PackedVector3Array()
 		for q in toutes[k]["points"]:
@@ -55,6 +58,32 @@ func _lancer() -> void:
 			pts.append(Vector3(x, 0.0, z))
 		if pts.size() >= 2:
 			choisies.append({"id": toutes[k]["id"], "points": pts})
+	if _arg("mode") == "traversees":
+		# sortie de chaussée : du milieu de la rue jusque sur le bas-côté ou le trottoir, perpendiculairement à la rue
+		await physics_frame
+		await physics_frame
+		var espace := root.get_world_3d().direct_space_state
+		choisies.clear()
+		for k in range(0, toutes.size(), pas):
+			var r: Dictionary = toutes[k]
+			var q: Array = r["points"]
+			if r["pieton"] or r["revetement"] != "pave" or q.size() < 2:
+				continue
+			var i := (q.size() - 1) / 2
+			var a := Vector3(q[i][0], 0.0, -q[i][1])
+			var b := Vector3(q[i + 1][0], 0.0, -q[i + 1][1])
+			if a.distance_to(b) < 4.0:
+				continue
+			var milieu := (a + b) * 0.5
+			var travers := (b - a).normalized().cross(Vector3.UP)
+			for cote in [1.0, -1.0]:
+				var but: Vector3 = milieu + travers * cote * (float(r["largeur"]) * 0.5 + 1.3)
+				var sol := espace.intersect_ray(PhysicsRayQueryParameters3D.create(but + Vector3(0, 3, 0), but + Vector3(0, -1, 0)))
+				if sol.is_empty() or sol["position"].y < -0.05 or sol["position"].y > 0.5:
+					continue   # pas de sol franc à cet endroit (eau, toit)
+				if not espace.intersect_ray(PhysicsRayQueryParameters3D.create(milieu + Vector3(0, 1, 0), but + Vector3(0, 1, 0))).is_empty():
+					continue   # un mur borde la rue ici : ce n'est pas un test de bordure
+				choisies.append({"id": "traversee:" + String(r["id"]), "points": PackedVector3Array([milieu, but])})
 	_total_routes = choisies.size()
 	var nb := clampi(int(_arg("bots", "24")), 1, 64)
 	Engine.time_scale = 8.0
@@ -65,10 +94,10 @@ func _lancer() -> void:
 		bot.set_script(script_bot)
 		var forme := CollisionShape3D.new()
 		var capsule := CapsuleShape3D.new()
-		capsule.radius = 0.35
-		capsule.height = 1.7
+		capsule.radius = 0.9 if vehicule else 0.35   # 1,8 m de large : le gabarit d'une voiture
+		capsule.height = 1.8 if vehicule else 1.7
 		forme.shape = capsule
-		forme.position.y = 0.85
+		forme.position.y = capsule.height * 0.5
 		bot.add_child(forme)
 		bot.collision_mask = 1
 		bot.collision_layer = 2   # les bots ne se gênent pas entre eux
@@ -76,6 +105,7 @@ func _lancer() -> void:
 		for k in range(b, choisies.size(), nb):
 			lot.append(choisies[k])
 		bot.set("routes", lot)
+		bot.set("tolerance", capsule.radius + 0.35)
 		root.add_child(bot)
 		_bots.append(bot)
 	await physics_frame
@@ -83,7 +113,7 @@ func _lancer() -> void:
 	for bot in _bots:
 		bot.call("demarrer")
 	_debut = Time.get_ticks_msec()
-	print("      %d bot(s) sur %d route(s) (une route sur %d)" % [nb, _total_routes, pas])
+	print("      %d bot(s) au gabarit %s sur %d route(s) (une route sur %d)" % [nb, "véhicule (1,8 m de large)" if vehicule else "piéton", _total_routes, pas])
 
 
 func _process(_delta: float) -> bool:

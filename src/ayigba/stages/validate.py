@@ -25,7 +25,7 @@ from ..gltf import check_name
 from ..mesh import load_mesh
 
 STAGE = "tests"
-GROUND_LAYERS = ("terrain", "chaussees", "eau")
+GROUND_LAYERS = ("terrain", "chaussees", "trottoirs", "eau")
 
 
 def run(ctx) -> dict:
@@ -74,7 +74,9 @@ def run(ctx) -> dict:
             continue
         area = 0.5 * np.linalg.norm(np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]), axis=1)
         if name in GROUND_LAYERS:
-            ground_area += float(area[np.ptp(tris[:, :, 2], axis=1) < 1e-6].sum())
+            # surface vue du dessus : une bordure en pente compte pour sa projection, une berge verticale pour zéro
+            a, b, c = tris[:, 0, :2], tris[:, 1, :2], tris[:, 2, :2]
+            ground_area += float((0.5 * np.abs((b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1]) - (b[:, 1] - a[:, 1]) * (c[:, 0] - a[:, 0]))).sum())
         lo, hi = tris.reshape(-1, 3).min(axis=0), tris.reshape(-1, 3).max(axis=0)
         if lo[0] < minx - 0.5 or lo[1] < miny - 0.5 or hi[0] > maxx + 0.5 or hi[1] > maxy + 0.5:
             error("hors_zone", f"couche {name} : des triangles sortent de la zone")

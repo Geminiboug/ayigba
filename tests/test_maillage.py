@@ -166,6 +166,17 @@ def lire_glb(chemin):
     return data, magic, version, total, ljson, tjson, lbin, tbin, doc, binaire
 
 
+def lire_prim(doc, binaire, prim):
+    """Renvoie (positions, normales, indices) d'une primitive."""
+    def lire(acc_i, dtype, n):
+        a = doc["accessors"][acc_i]
+        v = doc["bufferViews"][a["bufferView"]]
+        return np.frombuffer(binaire, dtype=dtype, count=a["count"] * n, offset=v["byteOffset"])
+    pos = lire(prim["attributes"]["POSITION"], "<f4", 3).reshape(-1, 3)
+    nor = lire(prim["attributes"]["NORMAL"], "<f4", 3).reshape(-1, 3)
+    return pos, nor, lire(prim["indices"], "<u4", 1)
+
+
 def test_write_glb_structure_et_axes(tmp_path):
     chemin = tmp_path / "t.glb"
     tris = np.array([[(0, 0, 0), (1, 0, 0), (0, 1, 0)]], dtype=float)
@@ -183,15 +194,10 @@ def test_write_glb_structure_et_axes(tmp_path):
     acc = doc["accessors"][prim["attributes"]["POSITION"]]
     assert acc["count"] == 3 and "min" in acc and "max" in acc
 
-    def lire(cle):
-        a = doc["accessors"][prim["attributes"][cle]]
-        v = doc["bufferViews"][a["bufferView"]]
-        return np.frombuffer(binaire, dtype="<f4", count=a["count"] * 3, offset=v["byteOffset"]).reshape(-1, 3)
-
-    pos = lire("POSITION")
-    assert np.allclose(pos[2], (0, 0, -1))
-    assert np.allclose(pos[1], (1, 0, 0))
-    assert np.allclose(lire("NORMAL")[0], (0, 1, 0))
+    pos, nor, idx = lire_prim(doc, binaire, prim)
+    assert np.allclose(pos[idx[2]], (0, 0, -1))
+    assert np.allclose(pos[idx[1]], (1, 0, 0))
+    assert np.allclose(nor[idx[0]], (0, 1, 0))
     # la couleur passe par un matériau, convertie de sRGB en linéaire
     base = doc["materials"][prim["material"]]["pbrMetallicRoughness"]["baseColorFactor"]
     assert np.allclose(base, (1.0, 0.21404, 0.05088, 1.0), atol=1e-4)
@@ -208,3 +214,65 @@ def test_write_glb_nom_interdit(tmp_path):
     tris = np.array([[(0, 0, 0), (1, 0, 0), (0, 1, 0)]], dtype=float)
     with pytest.raises(ValueError):
         gltf.write_glb(tmp_path / "x.glb", [("mur_col", tris, np.array([[1.0, 1.0, 1.0]]))])
+
+
+def _glb_prim(tmp_path, tris, nom="f.glb"):
+    chemin = tmp_path / nom
+    gltf.write_glb(chemin, [("c", tris, np.tile([[0.5, 0.5, 0.5]], (len(tris), 1)))])
+    lu = lire_glb(chemin)
+    doc, binaire = lu[8], lu[9]
+    return doc, binaire, doc["meshes"][0]["primitives"][0]
+
+
+def test_write_glb_carre_partage_ses_sommets(tmp_path):
+    tris = np.array([[(0, 0, 0), (1, 0, 0), (1, 1, 0)], [(0, 0, 0), (1, 1, 0), (0, 1, 0)]], dtype=float)
+    doc, binaire, prim = _glb_prim(tmp_path, tris)
+    pos, nor, idx = lire_prim(doc, binaire, prim)
+    assert len(pos) == 4 and len(idx) == 6
+    assert doc["accessors"][prim["attributes"]["POSITION"]]["count"] == 4
+
+
+def test_write_glb_relecture_memes_triangles(tmp_path):
+    rng = np.random.default_rng(1234)
+    tris = rng.uniform(-50, 50, size=(50, 3, 3))
+    doc, binaire, prim = _glb_prim(tmp_path, tris)
+    pos, nor, idx = lire_prim(doc, binaire, prim)
+    relus = pos[idx].reshape(-1, 3, 3)
+    attendu = np.stack([tris[:, :, 0], tris[:, :, 2], -tris[:, :, 1]], axis=2)
+    assert len(relus) == 50
+    restants = list(range(50))
+    for tri in relus:  # même triangle, mêmes coins dans le même ordre
+        for i in restants:
+            if np.allclose(tri, attendu[i], atol=1e-5):
+                restants.remove(i)
+                break
+        else:
+            pytest.fail("triangle relu absent de l'entrée")
+    assert not restants
+
+
+def test_write_glb_normales_differentes_ne_fusionnent_pas(tmp_path):
+    # coin de boîte : un sol et un mur qui partagent l'arête (0,0,0)-(1,0,0)
+    tris = np.array([[(0, 0, 0), (1, 0, 0), (0, 1, 0)], [(0, 0, 0), (1, 0, 0), (0, 0, 1)]], dtype=float)
+    doc, binaire, prim = _glb_prim(tmp_path, tris)
+    pos, nor, idx = lire_prim(doc, binaire, prim)
+    assert len(pos) == 6
+    assert len(set(idx[:3]) & set(idx[3:])) == 0
+
+
+def test_write_glb_deterministe(tmp_path):
+    rng = np.random.default_rng(7)
+    tris = rng.uniform(-5, 5, size=(30, 3, 3))
+    cols = np.tile([[0.2, 0.4, 0.6]], (30, 1))
+    gltf.write_glb(tmp_path / "a.glb", [("c", tris, cols)])
+    gltf.write_glb(tmp_path / "b.glb", [("c", tris, cols)])
+    assert (tmp_path / "a.glb").read_bytes() == (tmp_path / "b.glb").read_bytes()
+
+
+def test_write_glb_accessor_indices(tmp_path):
+    tris = np.array([[(0, 0, 0), (1, 0, 0), (0, 1, 0)]], dtype=float)
+    doc, binaire, prim = _glb_prim(tmp_path, tris)
+    acc = doc["accessors"][prim["indices"]]
+    assert acc["componentType"] == 5125 and acc["type"] == "SCALAR" and acc["count"] == 3
+    assert doc["bufferViews"][acc["bufferView"]]["target"] == 34963
+    assert doc["bufferViews"][doc["accessors"][prim["attributes"]["POSITION"]]["bufferView"]]["target"] == 34962

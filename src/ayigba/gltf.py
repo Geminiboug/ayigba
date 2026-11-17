@@ -43,11 +43,11 @@ def write_glb(path: Path, layers: list[tuple[str, np.ndarray, np.ndarray]], extr
     material_of: dict[tuple, int] = {}
     stats = {}
 
-    def add_view(data: np.ndarray) -> int:
+    def add_view(data: np.ndarray, target: int = 34962) -> int:
         offset = len(buffer)
         raw = data.tobytes()
         buffer.extend(_pad(raw, b"\x00"))
-        views.append({"buffer": 0, "byteOffset": offset, "byteLength": len(raw), "target": 34962})
+        views.append({"buffer": 0, "byteOffset": offset, "byteLength": len(raw), "target": target})
         return len(views) - 1
 
     def to_gltf(v: np.ndarray) -> np.ndarray:
@@ -74,8 +74,15 @@ def write_glb(path: Path, layers: list[tuple[str, np.ndarray, np.ndarray]], extr
                 material_of[key] = len(materials)
                 materials.append({"name": f"couleur_{len(materials):02d}", "pbrMetallicRoughness": {
                     "baseColorFactor": _to_linear(key) + [1.0], "metallicFactor": 0.0, "roughnessFactor": 0.9}})
-            pos = to_gltf(t[sel].reshape(-1, 3))
-            nor = to_gltf(np.repeat(normals[sel], 3, axis=0))
+            # sommets partagés : lignes [position, normale] glTF dédupliquées (normales arrondies à 4 décimales)
+            pos_all = to_gltf(t[sel].reshape(-1, 3))
+            nor_all = np.round(to_gltf(np.repeat(normals[sel], 3, axis=0)).astype(np.float64), 4).astype(np.float32)
+            rows = np.concatenate([pos_all, nor_all], axis=1)
+            uniq, inverse = np.unique(rows, axis=0, return_inverse=True)
+            inverse = np.asarray(inverse).reshape(-1)
+            pos = np.ascontiguousarray(uniq[:, :3])
+            nor = np.ascontiguousarray(uniq[:, 3:])
+            idx = inverse.astype("<u4")  # l'ordre des coins de chaque triangle est conservé
             attributes = {}
             for attr, data in (("POSITION", pos), ("NORMAL", nor)):
                 acc = {"bufferView": add_view(data), "componentType": 5126, "count": len(pos), "type": "VEC3"}
@@ -84,7 +91,8 @@ def write_glb(path: Path, layers: list[tuple[str, np.ndarray, np.ndarray]], extr
                     acc["max"] = [float(v) for v in pos.max(axis=0)]
                 accessors.append(acc)
                 attributes[attr] = len(accessors) - 1
-            primitives.append({"attributes": attributes, "material": material_of[key], "mode": 4})
+            accessors.append({"bufferView": add_view(idx, 34963), "componentType": 5125, "count": len(idx), "type": "SCALAR"})
+            primitives.append({"attributes": attributes, "indices": len(accessors) - 1, "material": material_of[key], "mode": 4})
         meshes.append({"name": name, "primitives": primitives})
         nodes.append({"name": name, "mesh": len(meshes) - 1})
         stats[name] = int(len(t))

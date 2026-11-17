@@ -15,7 +15,7 @@ La cohérence passe avant la fidélité à 100 %. Une carte sans trou, sans mur 
 
 L'outil est indépendant de tout jeu : il ne contient ni missions, ni météo, ni scénario. Il produit une carte et ses données, c'est tout.
 
-## État actuel (version 0.2, 17/11/2026)
+## État actuel (version 0.3, 17/11/2026)
 
 Ce qui marche, vérifié sur deux lieux : Cadjèhoun à Cotonou (7,3 km², 4 302 bâtiments) et Ouidah (8,9 km², 7 985 bâtiments).
 
@@ -23,19 +23,19 @@ Ce qui marche, vérifié sur deux lieux : Cadjèhoun à Cotonou (7,3 km², 4 302
 - **Collecte** OpenStreetMap avec cache : tout fonctionne hors ligne après le premier téléchargement.
 - **Nettoyage** : routes recollées, carrefours manquants créés, doublons et chevauchements retirés, rues rétrécies entre les murs, passages couverts ouverts, mer déduite du trait de côte.
 - **Secours** : routes isolées reliées ou retirées, îlots vides remplis de bâtiments cohérents avec leurs voisins, cours fermées comblées. Tout ce qui est généré est marqué `source = genere`.
-- **Génération 3D** : sol en partition exacte (terre, chaussées, eau), bâtiments, auvents, décors légers (arbres, poteaux, lampadaires, étals).
-- **Optimisation** : zones de 250 m chargeables à la demande, deux niveaux de détail, budget de triangles par zone (au plus 4 005 triangles de près dans une zone, pour un budget de 15 000).
+- **Génération 3D** : sol en partition exacte (terre, chaussées, trottoirs à plat, eau), bâtiments, auvents, décors légers (arbres, poteaux, lampadaires, étals). Sens de circulation et densité de zems exportés comme données.
+- **Optimisation** : zones de 250 m chargeables à la demande, deux niveaux de détail, budget de triangles par zone (au plus 4 400 triangles de près dans une zone, pour un budget de 15 000).
 - **Contrôles** : rapport de qualité avec 0 erreur et 0 avertissement sur les deux lieux ; 100 % de la surface libre accessible à pied.
-- **Bots dans Godot 4.7.2** : des personnages ont parcouru toutes les routes avec la physique du moteur, soit 623 routes (118,6 km) à Cadjèhoun et 602 routes (129,4 km) à Ouidah, sans aucun blocage ni chute.
+- **Bots dans Godot 4.7.2** : des personnages ont parcouru toutes les routes avec la physique du moteur, soit 623 routes (118,6 km) à Cadjèhoun et 602 routes (129,3 km) à Ouidah, à pied puis au gabarit d'une voiture de 1,8 m de large, sans aucun blocage ni chute.
 - **Export** : glTF (carte entière et zones), GeoJSON, routes en mètres pour le GPS, liste des décors, manifeste, fichier de crédits. Adaptateur Godot fourni.
 - **Suivi** : instantanés, comparaison avant/après, retour en arrière (`ayigba instantane`, `comparer`, `restaurer`).
-- **Reproductible** : même entrée et même graine donnent les mêmes fichiers. 120 tests automatiques.
+- **Reproductible** : même entrée et même graine donnent les mêmes fichiers. 125 tests automatiques.
 
 Ce qui n'est pas fait ou pas vérifié :
 
-- relief (le terrain est plat), toits en pente, façades, trottoirs, carrefours dessinés, ponts (rendus comme des remblais) ;
+- relief (le terrain est plat), toits en pente, façades, bordures de trottoir, carrefours dessinés, ponts (rendus comme des remblais) ;
 - sources autres qu'OpenStreetMap : presque toutes les hauteurs de bâtiments sont estimées ;
-- bots en véhicule ou hors des routes, navmesh ;
+- bots hors des routes, navmesh, vrai véhicule à roues ;
 - adaptateurs Unity et Unreal : écrits mais jamais testés, faute de moteur disponible ;
 - interface graphique, IA de style, édition manuelle ;
 - aucune comparaison avec le terrain réel ;

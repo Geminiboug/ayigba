@@ -1,6 +1,6 @@
 # Chantier ayigba : plan et avancement
 
-Écrit pour : Olympe, et tout agent qui reprend le travail. Mis à jour le 17/11/2026 (version 0.2).
+Écrit pour : Olympe, et tout agent qui reprend le travail. Mis à jour le 17/11/2026 (version 0.3).
 
 Règles de travail : ne rien pousser sans demande d'Olympe ; pas de co-auteur dans les commits ; ne jamais écrire le nom d'une marque ou d'une œuvre protégée ; dire ce qui n'est pas vérifié. Organisation : l'agent principal fait les tâches difficiles (conception, géométrie, contrôles, moteur) ; les tâches bien délimitées (tests, modules simples à contrat écrit) sont déléguées à des sous-agents, puis relues.
 
@@ -28,11 +28,11 @@ Règles de travail : ne rien pousser sans demande d'Olympe ; pas de co-auteur da
 |---|---|---|---|
 | 1 | Squelette, configuration, journal, reprise | **fait** | |
 | 2 | Collecte et nettoyage | **fait pour OpenStreetMap** | reste : empreintes de bâtiments Google et Microsoft (couverture du Bénin à vérifier), relief, images |
-| 3 | Génération de base | **fait, version simple** | routes, bâtiments, auvents, eau, sol plat, décors ; reste : relief, toits en pente, trottoirs, carrefours dessinés, passages piétons, façades |
-| 4 | Tests par bots, correction, rapport | **fait** | contrôles de géométrie, accessibilité exacte, bots marcheurs dans Godot sur toutes les routes, comparaison avant/après et retour en arrière ; reste : bots en véhicule, navmesh, bots hors des routes |
+| 3 | Génération de base | **fait, version simple** | routes, trottoirs à plat, bâtiments, auvents, eau, sol plat, décors ; densité de zems et sens de circulation exportés comme données ; reste : relief, toits en pente, bordures de trottoir surélevées, carrefours dessinés, passages piétons peints, façades |
+| 4 | Tests par bots, correction, rapport | **fait** | contrôles de géométrie, accessibilité exacte, bots dans Godot sur toutes les routes au gabarit piéton et au gabarit voiture (1,8 m de large), comparaison avant/après et retour en arrière ; reste : navmesh, bots hors des routes, vrai véhicule à roues |
 | 5 | Génération de secours | **fait, première version** | routes isolées reliées ou retirées, îlots vides remplis, cours fermées comblées ; tout est marqué `genere` |
 | 6 | Export Godot et vérification dans un vrai Godot | **fait** | adaptateur `adapters/godot/ayigba_carte.gd` (zones à la demande, collisions, niveaux de détail), vérifié par les bots |
-| 7 | Optimisation | **fait, première version** | zones de 250 m, deux niveaux de détail pour les bâtiments, budget par zone ; reste : fichiers plus compacts (sommets partagés), simplification du sol |
+| 7 | Optimisation | **fait, première version** | zones de 250 m, deux niveaux de détail pour les bâtiments, budget par zone, sommets partagés dans les fichiers ; reste : simplification du sol, mesure réelle des images par seconde |
 | 8 | Interface Tauri | à faire | |
 | 9 | IA de style | à faire | commencer par des règles et une classification |
 | 10 | Adaptateurs Unity et Unreal | **écrits, NON TESTÉS** | `adapters/unity`, `adapters/unreal` : aucun des deux moteurs n'était disponible |
@@ -46,15 +46,17 @@ Règles de travail : ne rien pousser sans demande d'Olympe ; pas de co-auteur da
 | Bâtiments (dont générés) | 4 302 (28) | 7 985 (140) |
 | Routes | 623, 118,9 km | 602, 129,6 km |
 | Décors | 2 648 | 3 243 |
-| Triangles (carte entière) | 157 000 | 216 000 |
+| Triangles (carte entière) | 167 201 | 225 060 |
 | Zones de 250 m | 126 | 144 |
-| Triangles au plus dans une zone, de près | 3 394 | 4 005 |
+| Triangles au plus dans une zone, de près | 3 427 | 4 400 |
 | Erreurs et avertissements du rapport | 0 et 0 | 0 et 0 |
 | Surface libre accessible à pied | 100 % | 100 % |
-| Bots dans Godot : routes sans défaut | 623 sur 623 (118,6 km) | 602 sur 602 (129,4 km) |
+| Bots piétons dans Godot : routes sans défaut | 623 sur 623 (118,6 km) | 602 sur 602 (129,3 km) |
+| Bots au gabarit voiture : routes carrossables sans défaut | 610 sur 610 (116,0 km) | 574 sur 574 (126,4 km) |
+| Bots : sorties de chaussée vers le bas-côté (piéton, voiture) | 250 sur 250, 250 sur 250 | non lancé |
 | Bots : blocages, chutes | 0, 0 | 0, 0 |
 
-Autres vérifications : `carte.glb` de Cadjèhoun ouverte dans Godot 4.7.2, 0 trou sur 32 487 rayons ; même entrée et même graine donnent les mêmes fichiers (test automatique) ; 120 tests automatiques passent.
+Autres vérifications : `carte.glb` de Cadjèhoun ouverte dans Godot 4.7.2, 0 trou sur 32 487 rayons ; même entrée et même graine donnent les mêmes fichiers (test automatique) ; 125 tests automatiques passent.
 
 ## Critères d'acceptation de la spec
 
@@ -72,22 +74,22 @@ Autres vérifications : `carte.glb` de Cadjèhoun ouverte dans Godot 4.7.2, 0 tr
 ## Ce qui n'est pas fait ou pas vérifié
 
 - Relief : le terrain est plat. Les bas-fonds et la lagune n'ont pas de pente.
-- Toits en pente, façades, trottoirs, carrefours dessinés, passages piétons, ponts (rendus comme des remblais), plafond des passages couverts (ouverts à ciel ouvert).
+- Toits en pente, façades, carrefours dessinés, passages piétons peints, ponts (rendus comme des remblais), plafond des passages couverts (ouverts à ciel ouvert).
 - Sources autres qu'OpenStreetMap. Presque toutes les hauteurs de bâtiments sont estimées par une règle simple.
 - Les décors n'ont pas de collision. Leur placement suit des règles simples, pas une observation du terrain.
-- Bots en véhicule, navmesh, bots qui quittent les routes.
+- Navmesh, bots qui quittent les routes, vrai véhicule à roues (le bot « voiture » est une capsule de 1,8 m de large).
+- La densité de zems exportée est une règle (classe de route, proximité d'un marché, d'une gare, d'une école...), pas une mesure.
 - Interface graphique, IA de style, édition manuelle.
 - Unity, Unreal, Windows natif (l'outil a tourné sous Linux dans WSL ; Godot sous Windows).
 - Aucune comparaison avec le terrain réel.
-- Fichiers glTF non compacts (sommets non partagés) : 15 à 20 Mo par quartier.
 
 ## Prochaines tâches, dans l'ordre proposé
 
-1. **Trottoirs et carrefours** : bordures, passages piétons, sens de circulation et densité de zems exportés comme données.
+1. **Carrefours dessinés et passages piétons peints.**
 2. **Relief** : modèle d'élévation libre (Copernicus), sol drapé, bâtiments posés à la bonne altitude.
 3. **Deuxième source de bâtiments** : vérifier la couverture de Google Open Buildings au Bénin, fusionner, enregistrer la licence.
-4. **Bots en véhicule et hors des routes**, navmesh.
-5. **Fichiers plus compacts** et budget mesuré en images par seconde dans Godot.
+4. **Bots hors des routes**, navmesh, vrai véhicule à roues.
+5. **Budget mesuré en images par seconde** dans Godot, sur une machine modeste.
 6. **Interface Tauri** : carte, erreurs en rouge, rejeu d'un bot bloqué, validation des corrections.
 7. **Style par quartier** : règles puis classification d'images, sur les photos d'Olympe uniquement.
 8. **Test réel d'Unity et d'Unreal**, puis Porto-Novo et Parakou.
@@ -98,6 +100,8 @@ Autres vérifications : `carte.glb` de Cadjèhoun ouverte dans Godot 4.7.2, 0 tr
 - Dans Godot, un rayon qui tombe pile sur une arête entre deux triangles peut passer au travers : le test tire des rayons décalés avant de conclure à un trou.
 - Godot affiche en blanc un glTF coloré par sommets : les couleurs passent par des matériaux.
 - Les largeurs de rue par défaut sont trop larges pour Cotonou : 485 bâtiments étaient rognés à tort avant la règle « la rue se rétrécit avant le mur ».
+- Bordure de trottoir en pente obtenue en triangulant l'anneau entre deux contours : 1 757 faces à plus de 45 degrés, bots piétons bloqués. Retirée ; les trottoirs sont à plat tant qu'une bordure garantie franchissable n'existe pas.
+- Un bot plus large que la tolérance d'arrivée ne peut pas « toucher » le dernier point d'une voie qui finit contre un mur : la tolérance suit le rayon du bot.
 - Une voie couverte qui traverse un bâtiment, ou un auvent posé sur une voie, bloque un personnage si le bâtiment est rendu plein : trouvé par les bots, corrigé (passage ouvert, auvent sur poteaux).
 - Godot pour Windows n'écrit pas de façon fiable dans un dossier WSL : le projet de vérification et la carte sont copiés sur un disque Windows avant le test.
 - La reprise des étapes dépend de l'empreinte du code : modifier un module commun refait toutes les étapes.

@@ -6,6 +6,7 @@ const VITESSE := 5.0
 const DELAI_BLOCAGE := 3.0
 
 var routes: Array = []    # [{ "id": String, "points": PackedVector3Array }]
+var tolerance := 0.6      # distance à laquelle un point est considéré atteint : le rayon du bot plus une marge (une voie peut finir contre un mur)
 var echecs: Array = []
 var fini := false
 var distance := 0.0
@@ -49,7 +50,7 @@ func _physics_process(delta: float) -> void:
 		return
 	var vers := Vector3(pts[_p].x - global_position.x, 0.0, pts[_p].z - global_position.z)
 	var d := vers.length()
-	if d < 0.6:
+	if d < tolerance:
 		_p += 1
 		_meilleur = INF
 		_depuis = 0.0

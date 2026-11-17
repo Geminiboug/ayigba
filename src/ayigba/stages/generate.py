@@ -25,6 +25,8 @@ STAGE = "generation"
 WATER_LEVEL = -0.3
 BED_LEVEL = -1.2
 
+SIDEWALK_CLASSES = {"trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "living_street"}
+SIDEWALK = (0.63, 0.62, 0.59)
 SAND = (0.78, 0.69, 0.52)
 LATERITE = (0.72, 0.52, 0.36)
 ASPHALT = (0.23, 0.23, 0.25)
@@ -79,9 +81,25 @@ def run(ctx) -> dict:
         unpaved_part = unpaved_part.difference(solid)
     land_part = remaining.difference(unpaved_part)
 
-    parts = {"eau": water_part, "revetu": paved_part, "non_revetu": unpaved_part, "terre": land_part}
+    # trottoirs : une bande le long des rues revêtues, prise sur la terre (jamais sur une chaussée, un bâtiment ou l'eau)
+    walk_part = None
+    if bool(ctx.config.option("trottoirs", "actif", True)):
+        width = float(ctx.config.option("trottoirs", "largeur_m", 1.6))
+        bands = [g.buffer(p["largeur"] / 2.0 + width, cap_style="round") for g, p in roads
+                 if p["classe"] in SIDEWALK_CLASSES and p["revetement"] == "pave" and not p["tunnel"] and not p["pieton"]]
+        if bands:
+            walk_part = unary_union(bands).intersection(land_part)
+            if solid is not None:
+                walk_part = walk_part.difference(solid.buffer(0.05))
+            walk_part = unary_union([q for q in _polygons(walk_part) if q.area >= 2.0])
+            if walk_part.is_empty:
+                walk_part = None
+            else:
+                land_part = land_part.difference(walk_part)
+
+    parts = {"eau": water_part, "revetu": paved_part, "non_revetu": unpaved_part, "trottoir": walk_part, "terre": land_part}
     ground_features = []
-    for kind in ("eau", "non_revetu", "revetu", "terre"):
+    for kind in ("eau", "non_revetu", "revetu", "trottoir", "terre"):
         for k, p in enumerate(_polygons(parts[kind]) if parts[kind] is not None else []):
             if p.area > 0:
                 ground_features.append((p, {"id": f"{kind}/{k}", "genre": kind}))
@@ -107,6 +125,14 @@ def run(ctx) -> dict:
     for p in _polygons(unpaved_part):
         chaussee.add_flat(p, 0.0, LATERITE)
     finish(chaussee, True, "chaussées revêtues et non revêtues, pistes d'aéroport")
+
+    # Trottoirs à plat, au niveau de la chaussée. Un essai de bordure surélevée en pente a été retiré le 17/11/2026 :
+    # la triangulation donnait par endroits des faces presque verticales, et les bots piétons restaient bloqués.
+    # Une bordure ne reviendra que si chaque face est garantie franchissable.
+    trottoirs = MeshBuilder("trottoirs")
+    for p in _polygons(walk_part) if walk_part is not None else []:
+        trottoirs.add_flat(p, 0.0, SIDEWALK)
+    finish(trottoirs, True, "trottoirs à plat, sans bordure")
 
     eau = MeshBuilder("eau")
     fond = MeshBuilder("fond_eau")

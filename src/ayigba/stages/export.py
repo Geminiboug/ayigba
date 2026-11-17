@@ -15,6 +15,7 @@ import shutil
 
 import numpy as np
 import shapely
+from shapely import STRtree
 
 from .. import __version__
 from ..credits import write_credits
@@ -23,6 +24,23 @@ from ..gltf import write_glb
 from ..mesh import load_mesh
 
 STAGE = "export"
+
+# Densité de motos-taxis (zems) par route, de 0 à 1 : une DONNÉE pour les jeux, estimée par une règle simple
+# (classe de la route, proximité d'un lieu qui attire les zems). Aucune mesure de terrain derrière ces valeurs.
+ZEM_BASE = {"trunk": 0.8, "primary": 0.9, "secondary": 0.8, "tertiary": 0.7, "unclassified": 0.5, "residential": 0.4,
+            "living_street": 0.3, "service": 0.15, "track": 0.1}
+ZEM_MAGNETS = {"marketplace", "bus_station", "taxi", "fuel", "hospital", "clinic", "university", "college", "school", "bank", "place_of_worship"}
+
+
+def _zem_density(roads, pois) -> None:
+    magnets = [g for g, p in pois if p.get("type") in ZEM_MAGNETS]
+    tree = STRtree(magnets) if magnets else None
+    for g, p in roads:
+        d = 0.0 if p["pieton"] else ZEM_BASE.get(p["classe"], 0.2)
+        if d > 0 and tree is not None and len(tree.query(g.buffer(150.0))) > 0:
+            d = min(1.0, d + 0.2)
+        p["densite_zems"] = round(d, 2)
+        p["densite_zems_source"] = "regle"
 
 
 def run(ctx) -> dict:
@@ -46,6 +64,7 @@ def run(ctx) -> dict:
         return [(shapely.transform(g, convert), p) for g, p in features]
 
     roads = read_features(ctx.project.work / "secours" / "roads.geojson")
+    _zem_density(roads, read_features(clean / "pois.geojson"))
     buildings = read_features(gen / "buildings.geojson")
     pois = read_features(clean / "pois.geojson")
     write_features(out / "routes.geojson", to_wgs84(roads), ndigits=7)
@@ -56,7 +75,8 @@ def run(ctx) -> dict:
     write_features(out / "decors.geojson", to_wgs84(decors), ndigits=7)
 
     # routes dans le repère de la carte (mètres), pour les bots, le GPS et la circulation d'un jeu
-    local_roads = [{"id": p["id"], "classe": p["classe"], "largeur": p["largeur"], "sens_unique": p["sens_unique"], "pieton": p["pieton"],
+    local_roads = [{"id": p["id"], "classe": p["classe"], "largeur": p["largeur"], "sens_unique": p["sens_unique"], "sens_inverse": p.get("sens_inverse", False), "voies": p.get("voies", 1),
+                    "pieton": p["pieton"], "densite_zems": p["densite_zems"],
                     "revetement": p["revetement"], "points": [[round(x, 2), round(y, 2)] for x, y in g.coords]} for g, p in roads if g.geom_type == "LineString"]
     (out / "routes_local.json").write_text(json.dumps({"repere": "x est, y nord, metres ; dans le glTF : X = x, Z = -y", "routes": local_roads},
                                                       ensure_ascii=False, sort_keys=True), encoding="utf-8")
