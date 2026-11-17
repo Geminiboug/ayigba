@@ -5,20 +5,26 @@
 ## Vue d'ensemble
 
 ```
-collecte -> nettoyage -> generation -> secours -> tests -> optimisation -> export
+collecte -> nettoyage -> secours -> generation -> tests -> optimisation -> export
 ```
 
 Chaque étape est un module de `src/ayigba/stages/` qui expose `run(ctx) -> dict`. Elle lit les fichiers de l'étape précédente et écrit les siens : on peut donc reprendre après un plantage, et inspecter chaque fichier intermédiaire.
 
-| Étape | Module | Lit | Écrit | État |
-|---|---|---|---|---|
-| collecte | `collect.py` | API Overpass | `cache/osm_overpass.json`, `data/sources.json` | fait (OpenStreetMap seulement) |
-| nettoyage | `clean.py` | le cache | `work/nettoyage/*.geojson` | fait |
-| generation | `generate.py` | nettoyage | `work/generation/*.npz`, `sol.geojson`, `buildings.geojson`, `scene.json` | fait (version simple) |
-| secours | `fallback.py` | | | à faire |
-| tests | `validate.py` | nettoyage, generation | `reports/qualite.json`, `reports/qualite.md` | fait (sans moteur de jeu) |
-| optimisation | `optimize.py` | | | à faire |
-| export | `export.py` | generation, rapports | `out/neutre/*` | fait (format neutre) |
+| Étape | Module | Lit | Écrit |
+|---|---|---|---|
+| collecte | `collect.py` | API Overpass | `cache/osm_overpass.json`, `data/sources.json` |
+| nettoyage | `clean.py` | le cache | `work/nettoyage/*.geojson` |
+| secours | `fallback.py` | nettoyage | `work/secours/roads.geojson`, `buildings.geojson` (réel + généré) |
+| generation | `generate.py` | nettoyage, secours | `work/generation/*.npz`, `sol.geojson`, `buildings.geojson`, `decors.geojson`, `scene.json` |
+| tests | `validate.py` | secours, generation | `reports/qualite.json`, `reports/qualite.md` |
+| optimisation | `optimize.py` | generation | `work/optimisation/zones.json`, `zones/*.npz` |
+| export | `export.py` | tout | `out/neutre/*` |
+
+Modules communs : `access.py` (accessibilité à pied sur les formes exactes), `decor.py` et `props.py` (placement et formes des décors), `mesh.py` et `gltf.py` (maillages et écriture glTF), `geocode.py` (projet à partir d'un nom), `history.py` (instantanés et comparaison).
+
+Le secours passe avant la génération des maillages : les éléments générés suivent ainsi exactement le même chemin (maillages, contrôles, export) que les données réelles.
+
+Les bots qui marchent dans un vrai moteur ne sont pas une étape du pipeline : ils sont dans `verif/godot/` et se lancent avec Godot.
 
 ## Dossier d'un projet
 

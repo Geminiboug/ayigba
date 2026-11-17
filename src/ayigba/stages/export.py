@@ -11,6 +11,7 @@ Sorties dans out/neutre/ :
 from __future__ import annotations
 
 import json
+import shutil
 
 import numpy as np
 import shapely
@@ -44,14 +45,39 @@ def run(ctx) -> dict:
             return np.column_stack([lon, lat])
         return [(shapely.transform(g, convert), p) for g, p in features]
 
-    roads = read_features(clean / "roads.geojson")
+    roads = read_features(ctx.project.work / "secours" / "roads.geojson")
     buildings = read_features(gen / "buildings.geojson")
     pois = read_features(clean / "pois.geojson")
     write_features(out / "routes.geojson", to_wgs84(roads), ndigits=7)
     write_features(out / "batiments.geojson", to_wgs84(buildings), ndigits=7)
     write_features(out / "points_interet.geojson", to_wgs84(pois), ndigits=7)
 
-    generated = sum(1 for _, p in roads + buildings if p.get("source") == "genere")
+    decors = read_features(gen / "decors.geojson") if (gen / "decors.geojson").is_file() else []
+    write_features(out / "decors.geojson", to_wgs84(decors), ndigits=7)
+
+    # routes dans le repère de la carte (mètres), pour les bots, le GPS et la circulation d'un jeu
+    local_roads = [{"id": p["id"], "classe": p["classe"], "largeur": p["largeur"], "sens_unique": p["sens_unique"], "pieton": p["pieton"],
+                    "revetement": p["revetement"], "points": [[round(x, 2), round(y, 2)] for x, y in g.coords]} for g, p in roads if g.geom_type == "LineString"]
+    (out / "routes_local.json").write_text(json.dumps({"repere": "x est, y nord, metres ; dans le glTF : X = x, Z = -y", "routes": local_roads},
+                                                      ensure_ascii=False, sort_keys=True), encoding="utf-8")
+
+    # zones chargeables à la demande (étape optimisation)
+    opt = ctx.project.work / "optimisation"
+    zones_doc = None
+    if (opt / "zones.json").is_file():
+        zones_doc = json.loads((opt / "zones.json").read_text(encoding="utf-8"))
+        zdir = out / "zones"
+        if zdir.exists():
+            shutil.rmtree(zdir)
+        zdir.mkdir()
+        for z in zones_doc["zones"]:
+            with np.load(opt / "zones" / f"{z['nom']}.npz") as data:
+                zl = [(c["nom"], data[f"{c['nom']}__triangles"].astype(np.float64), data[f"{c['nom']}__couleurs"]) for c in z["couches"]]
+            write_glb(zdir / f"{z['nom']}.glb", zl, extras={"zone": z["nom"], "emprise_locale": z["emprise"]})
+            z["fichier"] = f"zones/{z['nom']}.glb"
+        (out / "zones.json").write_text(json.dumps(zones_doc, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
+
+    generated = sum(1 for _, p in roads + buildings + decors if p.get("source") == "genere")
     write_credits(ctx, out, nb_generes=generated)
 
     quality_path = ctx.project.reports / "qualite.json"
@@ -63,8 +89,10 @@ def run(ctx) -> dict:
         "repere": {"origine_lon": frame.lon0, "origine_lat": frame.lat0, "epsg_projection": frame.epsg, "unite": "metre",
                    "gltf": "X = est, Y = haut, Z = sud (soit -nord) ; origine au centre de la zone"},
         "couches": [{**layer, "triangles": stats.get(layer["nom"], 0)} for layer in scene["couches"]],
-        "fichiers": ["carte.glb", "routes.geojson", "batiments.geojson", "points_interet.geojson", "CREDITS.md"],
-        "compteurs": {"routes": len(roads), "batiments": len(buildings), "points_interet": len(pois), "elements_generes": generated},
+        "fichiers": ["carte.glb", "routes.geojson", "routes_local.json", "batiments.geojson", "points_interet.geojson", "decors.geojson", "CREDITS.md"]
+                    + (["zones.json", "zones/"] if zones_doc else []),
+        "zones": {"nombre": len(zones_doc["zones"]), "taille_zone_m": zones_doc["taille_zone_m"], "distance_detail_m": zones_doc["distance_detail_m"]} if zones_doc else None,
+        "compteurs": {"routes": len(roads), "batiments": len(buildings), "points_interet": len(pois), "decors": len(decors), "elements_generes": generated},
         "qualite": {"erreurs": len(quality.get("erreurs", [])), "avertissements": len(quality.get("avertissements", [])),
                     "non_verifie": quality.get("non_verifie", [])},
     }

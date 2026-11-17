@@ -53,6 +53,12 @@ class MeshBuilder:
         if len(t2):
             self._add(np.concatenate([t2, np.full((len(t2), 3, 1), float(z))], axis=2), color)
 
+    def add_flat_down(self, poly: Polygon, z: float, color) -> None:
+        """Face horizontale tournée vers le bas (dessous d'une dalle), à l'altitude z."""
+        t2 = triangulate(poly)
+        if len(t2):
+            self._add(np.concatenate([t2[:, ::-1], np.full((len(t2), 3, 1), float(z))], axis=2), color)
+
     def add_walls(self, poly: Polygon, z0: float, z1: float, color) -> None:
         """Murs verticaux le long de tous les contours du polygone, tournés vers l'extérieur de la matière."""
         poly = orient(poly, 1.0)

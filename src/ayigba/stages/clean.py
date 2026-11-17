@@ -418,10 +418,40 @@ def _resolve_road_building(roads: list[dict], buildings: list[dict], journal) ->
     out_roads: list[dict] = []
     for r in roads:
         p = r["props"]
-        if p["tunnel"] or p["couvert"] or r["level"][0] != "0":
+        if r["level"][0] != "0" and not (p["tunnel"] or p["couvert"]):
             out_roads.append(r)
             continue
         corridor = _corridor(r)
+        if p["tunnel"] or p["couvert"]:
+            # passage couvert : cette version ne sait pas faire de plafond. S'il traverse le bâtiment de part en part,
+            # on l'ouvre à ciel ouvert ; s'il finit dedans (parking, cour intérieure), on raccourcit la voie.
+            hits = [k for k in sorted(btree.query(r["line"]).tolist()) if k not in dead and buildings[k]["tags"].get("building") != "roof"
+                    and buildings[k]["poly"].intersects(r["line"])]
+            if not hits:
+                out_roads.append(r)
+                continue
+            line = r["line"]
+            for k in hits:
+                b = buildings[k]
+                ends_inside = b["poly"].contains(Point(line.coords[0])) or b["poly"].contains(Point(line.coords[-1]))
+                rest = [q for q in _polygons(b["poly"].difference(_corridor(r, 0.2))) if q.area >= MIN_BUILDING]
+                if not ends_inside and rest and sum(q.area for q in rest) >= 0.5 * b["poly"].area:
+                    b["poly"] = max(rest, key=lambda q: q.area)
+                    for n, extra in enumerate(sorted((q for q in rest if q is not b["poly"]), key=lambda q: -q.area)):
+                        buildings.append({"id": f"{b['id']}~{n + 1}", "poly": extra, "tags": b["tags"]})
+                    journal.record("corrige", b["id"], f"passage couvert {r['id']} ouvert à ciel ouvert à travers le bâtiment")
+                else:
+                    parts = [ln for ln in _lines(line.difference(b["poly"].buffer(0.3))) if ln.length >= STUB]
+                    line = max(parts, key=lambda ln: ln.length) if parts else None
+                    journal.record("corrige", r["id"], f"voie couverte raccourcie : elle finissait dans le bâtiment {b['id']}")
+                    if line is None:
+                        break
+            if line is not None:
+                p["tunnel"] = p["couvert"] = False
+                out_roads.append({**r, "line": line})
+            else:
+                journal.record("supprime", r["id"], "voie couverte entièrement à l'intérieur d'un bâtiment")
+            continue
         hits = [k for k in sorted(btree.query(corridor).tolist()) if k not in dead and buildings[k]["tags"].get("building") != "roof"
                 and buildings[k]["poly"].intersection(corridor).area > 1.0]
         if not hits:
@@ -552,6 +582,8 @@ def run(ctx) -> dict:
             surfaces.extend((p, oid, tags["aeroway"]) for p in _polygons(LineString(c).buffer(w / 2.0, cap_style="flat")))
         elif tags.get("aeroway") == "apron" and closed:
             surfaces.extend((p, oid, "apron") for p in _polygons(Polygon(c)))
+        elif closed and tags.get("aeroway") in ("aerodrome", "heliport"):
+            landuse.extend((p, oid, "aerodrome") for p in _polygons(Polygon(c)))
         elif closed and ("landuse" in tags or "leisure" in tags or tags.get("natural") in LANDUSE_NATURAL):
             kind = tags.get("landuse") or tags.get("leisure") or tags.get("natural")
             landuse.extend((p, oid, kind) for p in _polygons(Polygon(c)))

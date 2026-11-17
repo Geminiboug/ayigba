@@ -186,7 +186,21 @@ def test_reseau_isole_signale(tmp_path):
     routes = geojson(d / "work" / "nettoyage" / "roads.geojson")
     reseaux = [f["properties"]["reseau"] for f in routes if f["properties"]["id"].endswith("/4")]
     assert reseaux == ["isole"]
-    assert "reseau_isole" in {w["genre"] for w in qualite(d)["avertissements"]}
+    # l'étape de secours la relie au réseau principal par un lien généré (60 m en ligne droite, sans obstacle)
+    apres = geojson(d / "work" / "secours" / "roads.geojson")
+    assert all(f["properties"]["reseau"] != "isole" for f in apres)
+    liens = [f for f in apres if f["properties"]["source"] == "genere"]
+    assert len(liens) == 1 and liens[0]["properties"]["id"].startswith("genere/acces-")
+    assert qualite(d)["erreurs"] == []
+
+
+def test_route_isolee_sans_acces_retiree(tmp_path):
+    # à 70 m du réseau, au-delà de la longueur maximale d'un lien (60 m) : la route isolée est retirée
+    v = ville_de_base()
+    v.route([(100, 70), (140, 70)], ident=4)
+    d0 = construire(tmp_path / "a", v)
+    assert any(f["properties"]["source"] == "genere" for f in geojson(d0 / "work" / "secours" / "roads.geojson")) is False
+    assert decision_pour(d0, 4, "supprime")
 
 
 def test_batiment_sur_la_route_supprime(tmp_path):

@@ -25,6 +25,11 @@ class Config:
     seed: int
     style: str
     engine: str
+    options: str = "{}"  # sections facultatives ([secours], [optimisation]...) en JSON, pour rester hachable
+
+    def option(self, section: str, key: str, default):
+        """Valeur d'une section facultative de config.toml, ou la valeur par défaut."""
+        return json.loads(self.options).get(section, {}).get(key, default)
 
     @property
     def west(self) -> float:
@@ -75,4 +80,6 @@ def load_config(path: Path) -> Config:
         seed=int(gen.get("graine", 0)),
         style=str(gen.get("style", "defaut")),
         engine=str(exp.get("moteur", "neutre")),
+        options=json.dumps({k: v for k, v in raw.items() if k not in ("ville", "zone", "generation", "export") and isinstance(v, dict)},
+                           sort_keys=True, ensure_ascii=False),
     )

@@ -12,10 +12,13 @@ from __future__ import annotations
 
 import json
 
+from shapely.geometry import Point
 from shapely.ops import unary_union
 
+from ..decor import place_decor
 from ..geo import LocalFrame, read_features, write_features
 from ..mesh import MeshBuilder, rng_for
+from ..props import CATALOGUE, place
 from .clean import _polygons
 
 STAGE = "generation"
@@ -52,8 +55,9 @@ def run(ctx) -> dict:
     zone = frame.zone_polygon()
     seed = ctx.config.seed
 
-    roads = read_features(src / "roads.geojson")
-    buildings = read_features(src / "buildings.geojson")
+    filled = ctx.project.work / "secours"  # routes et bâtiments après l'étape de secours (réels + générés)
+    roads = read_features(filled / "roads.geojson")
+    buildings = read_features(filled / "buildings.geojson")
     water = unary_union([g for g, _ in read_features(src / "water.geojson")]) if (src / "water.geojson").is_file() else None
     surfaces = [g for g, _ in read_features(src / "surfaces.geojson")]
 
@@ -112,6 +116,8 @@ def run(ctx) -> dict:
     finish(eau, False, "surface de l'eau")
     finish(fond, True, "fond de l'eau")
 
+    road_all = unary_union([g for g in (paved_part, unpaved_part) if not g.is_empty])
+    road_all = None if road_all.is_empty else road_all
     bati = MeshBuilder("batiments")
     estimated = 0
     final_buildings = []
@@ -124,6 +130,19 @@ def run(ctx) -> dict:
             source_h = "genere"
             estimated += 1
         wall, roof = rng.choice(WALLS), rng.choice(ROOFS)
+        if props.get("type") == "roof":
+            # abri ouvert (auvent, préau) : une dalle en hauteur sur des poteaux, on passe dessous
+            height = max(height, 3.2)
+            for part in _polygons(geom):
+                bati.add_prism(part, height - 0.25, height, roof, roof)
+                bati.add_flat_down(part, height - 0.25, roof)
+                corners = list(part.minimum_rotated_rectangle.buffer(-0.4).exterior.coords)[:4] if part.area > 4 else []
+                for cx, cy in corners:
+                    post = Point(cx, cy).buffer(0.12, quad_segs=1)
+                    if part.contains(Point(cx, cy)) and (road_all is None or road_all.distance(Point(cx, cy)) > 0.6):
+                        bati.add_walls(post, 0.0, height - 0.25, (0.45, 0.45, 0.47))
+            final_buildings.append((geom, {**props, "hauteur": height, "hauteur_source": source_h}))
+            continue
         for part in _polygons(geom):
             bati.add_prism(part, 0.0, height, wall, roof)
         final_buildings.append((geom, {**props, "hauteur": height, "hauteur_source": source_h}))
@@ -132,9 +151,27 @@ def run(ctx) -> dict:
     if estimated:
         ctx.journal.record("genere", "batiments", f"hauteur estimée pour {estimated} bâtiment(s) sans hauteur dans OSM (règle par surface, tirage lié à la graine)")
 
+    # décors : points placés par règles, puis maillages légers ; la liste est aussi exportée telle quelle
+    items = []
+    if bool(ctx.config.option("decors", "actif", True)):
+        road_surface = unary_union([g for g in (paved_part, unpaved_part) if not g.is_empty])
+        items = place_decor(zone, roads, final_buildings, water_part, road_surface if not road_surface.is_empty else None,
+                            read_features(src / "landuse.geojson"), read_features(src / "pois.geojson"), seed)
+    decors = MeshBuilder("decors")
+    for k, item in enumerate(items):
+        pieces = place(CATALOGUE[item["type"]](rng_for(seed, f"decor:{item['type']}:{item['x']}:{item['y']}")), item["x"], item["y"], item["angle"])
+        for tris, color in pieces:
+            decors._add(tris, color)
+    finish(decors, False, "décors légers : arbres, poteaux, lampadaires, étals, panneaux")
+    write_features(out / "decors.geojson", [(Point(i["x"], i["y"]), {"id": f"decor/{k}", "type": i["type"], "angle": i["angle"], "source": i["source"]})
+                                            for k, i in enumerate(items)])
+    if items:
+        ctx.journal.record("genere", "decors", f"{len(items)} décor(s) placés par règles selon le type de rue et de terrain",
+                           par_type={t: sum(1 for i in items if i["type"] == t) for t in sorted({i["type"] for i in items})})
+
     (out / "scene.json").write_text(json.dumps({"couches": layers, "niveau_eau": WATER_LEVEL, "niveau_fond": BED_LEVEL}, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
     return {
         "triangles": sum(layer["triangles"] for layer in layers),
         "couches": {layer["nom"]: layer["triangles"] for layer in layers},
-        "batiments": len(buildings), "hauteurs_estimees": estimated,
+        "batiments": len(buildings), "hauteurs_estimees": estimated, "decors": len(items),
     }

@@ -1,0 +1,18 @@
+# Projet créé depuis le lieu : Ouidah, Atlantique, Bénin
+[ville]
+nom = "Ouidah, Bénin"
+quartier = ""
+pays = ""
+
+[zone]
+# Rectangle en degrés WGS84 : ouest, sud, est, nord.
+bbox = [2.0718, 6.35314, 2.09892, 6.38009]
+
+[generation]
+# Même entrée + même graine = même carte.
+graine = 7
+style = "defaut"
+
+[export]
+# "neutre" (glTF + GeoJSON).
+moteur = "neutre"

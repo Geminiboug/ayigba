@@ -1,6 +1,8 @@
 """Enchaînement des étapes, avec reprise : une étape déjà faite avec la même entrée n'est pas refaite.
 
-collecte -> nettoyage -> generation -> secours -> tests -> optimisation -> export
+collecte -> nettoyage -> secours -> generation -> tests -> optimisation -> export
+
+Le secours passe avant la génération des maillages : les éléments générés suivent ainsi le même chemin que les données réelles.
 
 Chaque étape est un module de ayigba.stages qui expose `run(ctx) -> dict` (résumé chiffré).
 Une étape terminée écrit work/<étape>/_fait.json ; ce fichier contient l'empreinte de la configuration
@@ -21,8 +23,8 @@ from .project import Context
 STAGES: list[tuple[str, str]] = [
     ("collecte", "ayigba.stages.collect"),
     ("nettoyage", "ayigba.stages.clean"),
-    ("generation", "ayigba.stages.generate"),
     ("secours", "ayigba.stages.fallback"),
+    ("generation", "ayigba.stages.generate"),
     ("tests", "ayigba.stages.validate"),
     ("optimisation", "ayigba.stages.optimize"),
     ("export", "ayigba.stages.export"),
