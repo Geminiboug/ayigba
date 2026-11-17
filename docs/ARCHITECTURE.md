@@ -5,7 +5,7 @@
 ## Vue d'ensemble
 
 ```
-collecte -> nettoyage -> secours -> generation -> tests -> optimisation -> export
+collecte -> nettoyage -> relief -> secours -> generation -> tests -> optimisation -> export
 ```
 
 Chaque étape est un module de `src/ayigba/stages/` qui expose `run(ctx) -> dict`. Elle lit les fichiers de l'étape précédente et écrit les siens : on peut donc reprendre après un plantage, et inspecter chaque fichier intermédiaire.
@@ -14,13 +14,14 @@ Chaque étape est un module de `src/ayigba/stages/` qui expose `run(ctx) -> dict
 |---|---|---|---|
 | collecte | `collect.py` | API Overpass | `cache/osm_overpass.json`, `data/sources.json` |
 | nettoyage | `clean.py` | le cache | `work/nettoyage/*.geojson` |
+| relief | `relief.py` | API Copernicus (tuile de 1 degré, cache) | `cache/dem_copernicus.npz`, `work/relief/info.json` |
 | secours | `fallback.py` | nettoyage | `work/secours/roads.geojson`, `buildings.geojson` (réel + généré) |
 | generation | `generate.py` | nettoyage, secours | `work/generation/*.npz`, `sol.geojson`, `buildings.geojson`, `decors.geojson`, `scene.json` |
 | tests | `validate.py` | secours, generation | `reports/qualite.json`, `reports/qualite.md` |
 | optimisation | `optimize.py` | generation | `work/optimisation/zones.json`, `zones/*.npz` |
 | export | `export.py` | tout | `out/neutre/*` |
 
-Modules communs : `access.py` (accessibilité à pied sur les formes exactes), `decor.py` et `props.py` (placement et formes des décors), `mesh.py` et `gltf.py` (maillages et écriture glTF), `geocode.py` (projet à partir d'un nom), `history.py` (instantanés et comparaison).
+Modules communs : `dem.py` (modèle d'altitude : téléchargement, cache, enveloppe basse, lissage, interpolation), `terrain.py` (maillage conforme du sol drapé sur le relief), `access.py` (accessibilité à pied sur les formes exactes), `decor.py` et `props.py` (placement et formes des décors), `mesh.py` et `gltf.py` (maillages et écriture glTF), `geocode.py` (projet à partir d'un nom), `history.py` (instantanés et comparaison).
 
 Le secours passe avant la génération des maillages : les éléments générés suivent ainsi exactement le même chemin (maillages, contrôles, export) que les données réelles.
 
@@ -58,6 +59,7 @@ projects/<ville-quartier>/
 ## Choix techniques
 
 - **Python** (décision d'Olympe du 17/11/2026) : bibliothèques géographiques mûres et développement rapide. Les points lents pourront passer en Rust plus tard. Dépendances : numpy, shapely, pyproj, mapbox-earcut. Pas de GDAL ni de geopandas pour l'instant.
+- **Sol conforme.** Le sol est triangulé d'un seul tenant (triangulation de Delaunay contrainte, bibliothèque `triangle`) : les limites de toutes les parties (terre, chaussées, trottoirs, eau) sont des contraintes. Chaque triangle appartient à une seule partie, deux parties voisines partagent leurs sommets : aucune fissure, même sur un relief. L'altitude est calculée à chaque sommet.
 - **Sol en partition exacte.** Le sol est découpé en parties qui ne se chevauchent pas (eau, revêtu, non revêtu, terre) et dont la réunion vaut la zone. Pas de surfaces superposées, donc pas de scintillement, et un trou se détecte par un calcul de surface.
 - **Couleurs par matériaux.** Un matériau glTF par couleur, et non des couleurs de sommets : Godot 4.7 affiche les couleurs de sommets en blanc sans réglage (constaté le 17/11/2026).
 - **La rue se rétrécit avant le mur.** Quand OpenStreetMap ne donne pas la largeur d'une rue et que des bâtiments débordent sur la largeur supposée, on réduit la chaussée jusqu'à un minimum par classe. On ne rogne un bâtiment qu'ensuite.

@@ -46,6 +46,8 @@ func _verifier() -> void:
 	if scene == null:
 		_finir()
 		return
+	var exageration := float(_arg("exageration")) if _arg("exageration") != "" else 1.0
+	scene.scale = Vector3(1.0, exageration, 1.0)   # pour mieux voir le relief sur les captures (1 = échelle réelle)
 	root.add_child(scene)
 
 	var boite := AABB()
@@ -54,11 +56,12 @@ func _verifier() -> void:
 	var couches: Array[String] = []
 	for n in scene.find_children("*", "MeshInstance3D", true, false):
 		var mi := n as MeshInstance3D
-		couches.append(String(mi.name))
+		var avant := triangles
 		for s in mi.mesh.get_surface_count():
 			var tab := mi.mesh.surface_get_arrays(s)
 			var idx = tab[Mesh.ARRAY_INDEX]
 			triangles += (idx.size() if idx != null and idx.size() > 0 else (tab[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()) / 3
+		couches.append("%s (%d)" % [String(mi.name), triangles - avant])
 		var b := mi.global_transform * mi.get_aabb()
 		boite = b if premier else boite.merge(b)
 		premier = false
@@ -70,6 +73,14 @@ func _verifier() -> void:
 			mi.add_child(corps)
 	_note(couches.size() > 0, "%d couche(s) : %s" % [couches.size(), ", ".join(couches)])
 	_note(triangles > 0, "%d triangles" % triangles)
+	var manifeste := chemin.get_base_dir().path_join("manifeste.json")
+	if FileAccess.file_exists(manifeste):
+		var m = JSON.parse_string(FileAccess.get_file_as_string(manifeste))
+		if typeof(m) == TYPE_DICTIONARY:
+			var attendu := 0
+			for c in m.get("couches", []):
+				attendu += int(c.get("triangles", 0))
+			_note(attendu == triangles, "aucun triangle perdu à l'import : %d dans le manifeste, %d dans Godot" % [attendu, triangles])
 	print("      emprise : %.0f m (est-ouest) x %.0f m (nord-sud), hauteur de %.1f à %.1f m" % [boite.size.x, boite.size.z, boite.position.y, boite.end.y])
 
 	await physics_frame
@@ -127,6 +138,7 @@ func _capturer(dossier: String, boite: AABB) -> void:
 	cam.make_current()
 	var centre := boite.get_center()
 	var vues := {
+		"vue_basse": [Vector3(boite.position.x + boite.size.x * 0.08, boite.end.y * 0.35 + 60.0, boite.end.z - boite.size.z * 0.08), centre],
 		"vue_ensemble": [centre + Vector3(0, boite.size.z * 0.55, boite.size.z * 0.75), centre],
 		"vue_quartier": [centre + Vector3(-boite.size.x * 0.18, 140, boite.size.z * 0.02), centre + Vector3(-boite.size.x * 0.28, 0, -boite.size.z * 0.12)],
 		"vue_rue": [centre + Vector3(boite.size.x * 0.2, 35, boite.size.z * 0.1), centre + Vector3(boite.size.x * 0.3, 0, -boite.size.z * 0.02)],

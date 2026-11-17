@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 
 import numpy as np
+import shapely
 from shapely import STRtree
 from shapely.ops import unary_union
 
@@ -80,9 +81,24 @@ def run(ctx) -> dict:
         lo, hi = tris.reshape(-1, 3).min(axis=0), tris.reshape(-1, 3).max(axis=0)
         if lo[0] < minx - 0.5 or lo[1] < miny - 0.5 or hi[0] > maxx + 0.5 or hi[1] > maxy + 0.5:
             error("hors_zone", f"couche {name} : des triangles sortent de la zone")
-    if abs(ground_area - zone.area) > 1.0:
-        error("maillage_sol", f"la surface des maillages du sol ({ground_area:.1f} m2) diffère de celle de la zone ({zone.area:.1f} m2)",
-              ecart_m2=round(ground_area - zone.area, 1))
+    # pente du sol, mesurée le long des arêtes (robuste, contrairement à la normale d'un triangle très mince) :
+    # on ignore les arêtes verticales (berges) et celles de moins de 0,5 m
+    steepest = 0.0
+    for name in ("terrain", "chaussees", "trottoirs"):
+        tris, _ = load_mesh(gen / f"{name}.npz")
+        for i, j in ((0, 1), (1, 2), (2, 0)):
+            d = tris[:, j] - tris[:, i]
+            run_ = np.hypot(d[:, 0], d[:, 1])
+            ok = run_ > 0.5
+            if ok.any():
+                steepest = max(steepest, float(np.degrees(np.arctan(np.abs(d[ok, 2]) / run_[ok])).max()))
+    if steepest > 25.0:
+        warn("pente_forte", f"pente maximale du sol de {steepest:.1f} degrés : à vérifier (donnée d'altitude bruitée ?)", pente_max_deg=round(steepest, 1))
+    # le mailleur cale les coordonnées sur 1 cm : on compare à la zone calée, pas à la zone brute
+    zone_snapped = shapely.set_precision(zone, 0.01).area
+    if abs(ground_area - zone_snapped) > 1.0:
+        error("maillage_sol", f"la surface des maillages du sol ({ground_area:.1f} m2) diffère de celle de la zone ({zone_snapped:.1f} m2)",
+              ecart_m2=round(ground_area - zone_snapped, 1))
 
     # 3. conflits
     buildings = read_features(gen / "buildings.geojson")
@@ -136,7 +152,8 @@ def run(ctx) -> dict:
     b_src, r_src = by_source(buildings), by_source(roads)
     report = {
         "projet": ctx.project.slug, "ville": ctx.config.city, "quartier": ctx.config.district,
-        "zone_km2": round(zone.area / 1e6, 3), "triangles": triangles,
+        "zone_km2": round(zone.area / 1e6, 3), "triangles": triangles, "pente_max_deg": round(steepest, 1),
+        "altitudes_m": scene.get("altitudes"),
         "batiments": len(buildings), "hauteurs_estimees": sum(1 for _, p in buildings if p.get("hauteur_source") == "genere"),
         "routes": len(roads), "routes_km": round(sum(g.length for g, _ in roads) / 1000.0, 2),
         "elements_par_source": {"osm": b_src["osm"] + r_src["osm"], "genere": b_src["genere"] + r_src["genere"]},
@@ -149,7 +166,7 @@ def run(ctx) -> dict:
         "non_verifie": [
             "ce rapport ne remplace pas les bots dans un moteur de jeu (voir verif/godot)",
             "aucune comparaison avec le terrain réel",
-            "relief absent : le terrain est plat",
+            "relief : modèle de surface de 30 m de résolution, lissé ; il contient des bâtiments et des arbres, et ne voit pas les petits reliefs (talus, remblais, caniveaux)",
         ],
     }
     ctx.project.reports.mkdir(parents=True, exist_ok=True)

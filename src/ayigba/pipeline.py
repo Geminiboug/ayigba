@@ -1,6 +1,6 @@
 """Enchaînement des étapes, avec reprise : une étape déjà faite avec la même entrée n'est pas refaite.
 
-collecte -> nettoyage -> secours -> generation -> tests -> optimisation -> export
+collecte -> nettoyage -> relief -> secours -> generation -> tests -> optimisation -> export
 
 Le secours passe avant la génération des maillages : les éléments générés suivent ainsi le même chemin que les données réelles.
 
@@ -23,6 +23,7 @@ from .project import Context
 STAGES: list[tuple[str, str]] = [
     ("collecte", "ayigba.stages.collect"),
     ("nettoyage", "ayigba.stages.clean"),
+    ("relief", "ayigba.stages.relief"),
     ("secours", "ayigba.stages.fallback"),
     ("generation", "ayigba.stages.generate"),
     ("tests", "ayigba.stages.validate"),

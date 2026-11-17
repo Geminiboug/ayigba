@@ -22,6 +22,20 @@ def check_name(name: str) -> None:
         raise ValueError(f"nom de couche interdit (suffixe de collision réservé par Godot) : {name}")
 
 
+MAX_COLORS = 32   # couleurs (donc surfaces) par couche : Godot refuse plus de 256 surfaces par maillage et perd le reste en silence
+STEPS = (0.0, 0.02, 0.03, 0.04, 0.06, 0.08, 0.12, 0.16, 0.25, 0.5)
+
+
+def limit_palette(colors: np.ndarray, max_colors: int = MAX_COLORS) -> np.ndarray:
+    """Réduit le nombre de couleurs distinctes en arrondissant à un pas de plus en plus grand. Déterministe."""
+    col = np.asarray(colors, dtype=np.float64)
+    for step in STEPS:
+        q = col if step == 0.0 else np.round(col / step) * step
+        if len(np.unique(np.round(q, 4), axis=0)) <= max_colors:
+            return np.round(q, 4)
+    return np.round(np.round(col / 0.5) * 0.5, 4)
+
+
 def _pad(blob: bytes, fill: bytes) -> bytes:
     return blob + fill * ((4 - len(blob) % 4) % 4)
 
@@ -61,7 +75,7 @@ def write_glb(path: Path, layers: list[tuple[str, np.ndarray, np.ndarray]], extr
         normals = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
         length = np.linalg.norm(normals, axis=1, keepdims=True)
         ok = length[:, 0] > 1e-12
-        t, normals, col = t[ok], normals[ok] / length[ok], np.round(np.asarray(colors, dtype=np.float64)[ok], 4)
+        t, normals, col = t[ok], normals[ok] / length[ok], limit_palette(np.asarray(colors, dtype=np.float64)[ok])
         if len(t) == 0:
             continue
         palette, which = np.unique(col, axis=0, return_inverse=True)

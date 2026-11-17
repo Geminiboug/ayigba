@@ -4,14 +4,16 @@ Entrée  : work/nettoyage/*.geojson
 Sorties : work/generation/<couche>.npz (triangles + couleurs), sol.geojson (partition du sol),
           buildings.geojson (bâtiments avec leur hauteur finale), scene.json (liste des couches).
 
-Le sol est une partition exacte de la zone : terre, chaussées revêtues, chaussées non revêtues, eau.
-Aucune de ces parties ne se chevauche, et leur réunion couvre toute la zone : pas de trou, pas de scintillement.
-Limites de cette version : terrain plat, toits plats, pas de trottoirs, ponts rendus comme des remblais.
+Le sol est une partition exacte de la zone : terre, chaussées revêtues, chaussées non revêtues, trottoirs, eau.
+Il est maillé d'un seul tenant (ayigba.terrain) et drapé sur le relief : aucune fissure entre deux parties, aucun trou.
+Les bâtiments reposent sur le point le plus bas de leur emprise ; les décors sont posés à l'altitude du sol.
+Limites de cette version : relief de 30 m de résolution (modèle de surface, lissé), toits plats, ponts rendus comme des remblais.
 """
 from __future__ import annotations
 
 import json
 
+import numpy as np
 from shapely.geometry import Point
 from shapely.ops import unary_union
 
@@ -19,11 +21,11 @@ from ..decor import place_decor
 from ..geo import LocalFrame, read_features, write_features
 from ..mesh import MeshBuilder, rng_for
 from ..props import CATALOGUE, place
+from ..terrain import BED_DEPTH, build_ground, shore_walls
 from .clean import _polygons
+from .relief import altitudes
 
 STAGE = "generation"
-WATER_LEVEL = -0.3
-BED_LEVEL = -1.2
 
 SIDEWALK_CLASSES = {"trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "living_street"}
 SIDEWALK = (0.63, 0.62, 0.59)
@@ -111,34 +113,35 @@ def run(ctx) -> dict:
         n = builder.save(out / f"{builder.name}.npz")
         layers.append({"nom": builder.name, "triangles": n, "collision": collision, "contenu": what})
 
+    # sol : une seule triangulation conforme, drapée sur le relief (voir ayigba.terrain)
+    alt = altitudes(ctx, frame)
+    relief = alt.stats()
+    ground = build_ground(zone, parts, alt.hauteur, max_area=float(ctx.config.option("terrain", "aire_max_m2", 400.0)))
+
     terrain = MeshBuilder("terrain")
-    for p in _polygons(land_part):
-        terrain.add_flat(p, 0.0, SAND)
-    land_all = zone if water_part is None else zone.difference(water_part)
-    for p in _polygons(land_all):
-        terrain.add_walls(p, BED_LEVEL, 0.0, BED)  # berges : pas de vide entre la terre et l'eau
-    finish(terrain, True, "terre nue et berges")
+    terrain._add(ground.triangles_of(["terre"]), SAND)
+    finish(terrain, True, "terre nue, drapée sur le relief")
+
+    berges = MeshBuilder("berges")
+    berges._add(shore_walls(ground), BED)  # pas de vide entre la terre et l'eau
+    finish(berges, True, "berges verticales entre le sol et le fond de l'eau")
 
     chaussee = MeshBuilder("chaussees")
-    for p in _polygons(paved_part):
-        chaussee.add_flat(p, 0.0, ASPHALT)
-    for p in _polygons(unpaved_part):
-        chaussee.add_flat(p, 0.0, LATERITE)
+    chaussee._add(ground.triangles_of(["revetu"]), ASPHALT)
+    chaussee._add(ground.triangles_of(["non_revetu"]), LATERITE)
     finish(chaussee, True, "chaussées revêtues et non revêtues, pistes d'aéroport")
 
-    # Trottoirs à plat, au niveau de la chaussée. Un essai de bordure surélevée en pente a été retiré le 17/11/2026 :
-    # la triangulation donnait par endroits des faces presque verticales, et les bots piétons restaient bloqués.
-    # Une bordure ne reviendra que si chaque face est garantie franchissable.
+    # Trottoirs à plat par rapport à la chaussée (pas de bordure). Un essai de bordure surélevée en pente a été retiré le
+    # 17/11/2026 : des faces presque verticales bloquaient les bots piétons. Une bordure ne reviendra que si chaque face
+    # est garantie franchissable.
     trottoirs = MeshBuilder("trottoirs")
-    for p in _polygons(walk_part) if walk_part is not None else []:
-        trottoirs.add_flat(p, 0.0, SIDEWALK)
-    finish(trottoirs, True, "trottoirs à plat, sans bordure")
+    trottoirs._add(ground.triangles_of(["trottoir"]), SIDEWALK)
+    finish(trottoirs, True, "trottoirs au niveau de la chaussée, sans bordure")
 
     eau = MeshBuilder("eau")
     fond = MeshBuilder("fond_eau")
-    for p in _polygons(water_part) if water_part is not None else []:
-        eau.add_flat(p, WATER_LEVEL, WATER)
-        fond.add_flat(p, BED_LEVEL, BED)
+    eau._add(ground.triangles_of(["eau"], dz=0.0), WATER)
+    fond._add(ground.triangles_of(["eau"], dz=-BED_DEPTH), BED)
     finish(eau, False, "surface de l'eau")
     finish(fond, True, "fond de l'eau")
 
@@ -156,23 +159,30 @@ def run(ctx) -> dict:
             source_h = "genere"
             estimated += 1
         wall, roof = rng.choice(WALLS), rng.choice(ROOFS)
+        # altitude du sol sous l'emprise : le bâtiment repose sur le point le plus bas (et s'enfonce de 30 cm), son toit est
+        # à la hauteur indiquée au-dessus du point le plus haut
+        edge = np.concatenate([np.asarray(q.exterior.coords) for q in _polygons(geom)])
+        ground_z = alt.hauteur(edge[:, 0], edge[:, 1])
+        low, high = float(ground_z.min()), float(ground_z.max())
         if props.get("type") == "roof":
             # abri ouvert (auvent, préau) : une dalle en hauteur sur des poteaux, on passe dessous
             height = max(height, 3.2)
+            top = high + height
             for part in _polygons(geom):
-                bati.add_prism(part, height - 0.25, height, roof, roof)
-                bati.add_flat_down(part, height - 0.25, roof)
+                bati.add_prism(part, top - 0.25, top, roof, roof)
+                bati.add_flat_down(part, top - 0.25, roof)
                 corners = list(part.minimum_rotated_rectangle.buffer(-0.4).exterior.coords)[:4] if part.area > 4 else []
                 for cx, cy in corners:
                     post = Point(cx, cy).buffer(0.12, quad_segs=1)
                     if part.contains(Point(cx, cy)) and (road_all is None or road_all.distance(Point(cx, cy)) > 0.6):
-                        bati.add_walls(post, 0.0, height - 0.25, (0.45, 0.45, 0.47))
-            final_buildings.append((geom, {**props, "hauteur": height, "hauteur_source": source_h}))
+                        bati.add_walls(post, float(alt.hauteur(cx, cy)) - 0.3, top - 0.25, (0.45, 0.45, 0.47))
+            final_buildings.append((geom, {**props, "hauteur": height, "hauteur_source": source_h, "base": round(low - 0.3, 2), "sommet": round(top, 2)}))
             continue
+        top = high + height
         for part in _polygons(geom):
-            bati.add_prism(part, 0.0, height, wall, roof)
-        final_buildings.append((geom, {**props, "hauteur": height, "hauteur_source": source_h}))
-    finish(bati, True, "volumes des bâtiments, toits plats")
+            bati.add_prism(part, low - 0.3, top, wall, roof)
+        final_buildings.append((geom, {**props, "hauteur": height, "hauteur_source": source_h, "base": round(low - 0.3, 2), "sommet": round(top, 2)}))
+    finish(bati, True, "volumes des bâtiments, toits plats, posés sur le relief")
     write_features(out / "buildings.geojson", final_buildings)
     if estimated:
         ctx.journal.record("genere", "batiments", f"hauteur estimée pour {estimated} bâtiment(s) sans hauteur dans OSM (règle par surface, tirage lié à la graine)")
@@ -186,18 +196,19 @@ def run(ctx) -> dict:
     decors = MeshBuilder("decors")
     for k, item in enumerate(items):
         pieces = place(CATALOGUE[item["type"]](rng_for(seed, f"decor:{item['type']}:{item['x']}:{item['y']}")), item["x"], item["y"], item["angle"])
+        item["z"] = round(float(alt.hauteur(item["x"], item["y"])), 2)
         for tris, color in pieces:
-            decors._add(tris, color)
+            decors._add(tris + np.array([0.0, 0.0, item["z"]]), color)
     finish(decors, False, "décors légers : arbres, poteaux, lampadaires, étals, panneaux")
-    write_features(out / "decors.geojson", [(Point(i["x"], i["y"]), {"id": f"decor/{k}", "type": i["type"], "angle": i["angle"], "source": i["source"]})
+    write_features(out / "decors.geojson", [(Point(i["x"], i["y"]), {"id": f"decor/{k}", "type": i["type"], "angle": i["angle"], "z": i["z"], "source": i["source"]})
                                             for k, i in enumerate(items)])
     if items:
         ctx.journal.record("genere", "decors", f"{len(items)} décor(s) placés par règles selon le type de rue et de terrain",
                            par_type={t: sum(1 for i in items if i["type"] == t) for t in sorted({i["type"] for i in items})})
 
-    (out / "scene.json").write_text(json.dumps({"couches": layers, "niveau_eau": WATER_LEVEL, "niveau_fond": BED_LEVEL}, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
+    (out / "scene.json").write_text(json.dumps({"couches": layers, "niveau_eau": "propre à chaque plan d'eau (voir ayigba.terrain)", "altitudes": relief}, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
     return {
         "triangles": sum(layer["triangles"] for layer in layers),
         "couches": {layer["nom"]: layer["triangles"] for layer in layers},
-        "batiments": len(buildings), "hauteurs_estimees": estimated, "decors": len(items),
+        "batiments": len(buildings), "hauteurs_estimees": estimated, "decors": len(items), "altitudes_m": relief,
     }

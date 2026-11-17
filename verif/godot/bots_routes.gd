@@ -55,7 +55,7 @@ func _lancer() -> void:
 		for q in toutes[k]["points"]:
 			var x := clampf(q[0], boite.position.x + MARGE_BORD, boite.end.x - MARGE_BORD)
 			var z := clampf(-q[1], boite.position.z + MARGE_BORD, boite.end.z - MARGE_BORD)
-			pts.append(Vector3(x, 0.0, z))
+			pts.append(Vector3(x, float(q[2]) if q.size() > 2 else 0.0, z))   # q[2] : altitude du sol sous le point
 		if pts.size() >= 2:
 			choisies.append({"id": toutes[k]["id"], "points": pts})
 	if _arg("mode") == "traversees":
@@ -70,17 +70,18 @@ func _lancer() -> void:
 			if r["pieton"] or r["revetement"] != "pave" or q.size() < 2:
 				continue
 			var i := (q.size() - 1) / 2
-			var a := Vector3(q[i][0], 0.0, -q[i][1])
-			var b := Vector3(q[i + 1][0], 0.0, -q[i + 1][1])
+			var a := Vector3(q[i][0], q[i][2], -q[i][1])
+			var b := Vector3(q[i + 1][0], q[i + 1][2], -q[i + 1][1])
 			if a.distance_to(b) < 4.0:
 				continue
 			var milieu := (a + b) * 0.5
 			var travers := (b - a).normalized().cross(Vector3.UP)
 			for cote in [1.0, -1.0]:
 				var but: Vector3 = milieu + travers * cote * (float(r["largeur"]) * 0.5 + 1.3)
-				var sol := espace.intersect_ray(PhysicsRayQueryParameters3D.create(but + Vector3(0, 3, 0), but + Vector3(0, -1, 0)))
-				if sol.is_empty() or sol["position"].y < -0.05 or sol["position"].y > 0.5:
+				var sol := espace.intersect_ray(PhysicsRayQueryParameters3D.create(but + Vector3(0, 6, 0), but + Vector3(0, -6, 0)))
+				if sol.is_empty() or absf(sol["position"].y - milieu.y) > 1.5:
 					continue   # pas de sol franc à cet endroit (eau, toit)
+				but.y = sol["position"].y
 				if not espace.intersect_ray(PhysicsRayQueryParameters3D.create(milieu + Vector3(0, 1, 0), but + Vector3(0, 1, 0))).is_empty():
 					continue   # un mur borde la rue ici : ce n'est pas un test de bordure
 				choisies.append({"id": "traversee:" + String(r["id"]), "points": PackedVector3Array([milieu, but])})

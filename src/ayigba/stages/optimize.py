@@ -70,7 +70,7 @@ def run(ctx) -> dict:
         c = geom.centroid
         cell = int(cell_of(np.array([c.x]), np.array([c.y]))[0])
         for part in _polygons(geom.minimum_rotated_rectangle):
-            far.setdefault(cell, MeshBuilder(FAR_LAYER)).add_prism(part, 0.0, float(props["hauteur"]), (0.80, 0.76, 0.68), (0.52, 0.50, 0.50))
+            far.setdefault(cell, MeshBuilder(FAR_LAYER)).add_prism(part, float(props.get("base", 0.0)), float(props.get("sommet", props["hauteur"])), (0.80, 0.76, 0.68), (0.52, 0.50, 0.50))
     for cell, builder in far.items():
         per_zone.setdefault(cell, {})[FAR_LAYER] = (builder.triangles, builder.colors)
 

@@ -22,6 +22,7 @@ from ..credits import write_credits
 from ..geo import LocalFrame, read_features, write_features
 from ..gltf import write_glb
 from ..mesh import load_mesh
+from .relief import altitudes
 
 STAGE = "export"
 
@@ -75,10 +76,11 @@ def run(ctx) -> dict:
     write_features(out / "decors.geojson", to_wgs84(decors), ndigits=7)
 
     # routes dans le repère de la carte (mètres), pour les bots, le GPS et la circulation d'un jeu
+    alt = altitudes(ctx, frame)
     local_roads = [{"id": p["id"], "classe": p["classe"], "largeur": p["largeur"], "sens_unique": p["sens_unique"], "sens_inverse": p.get("sens_inverse", False), "voies": p.get("voies", 1),
                     "pieton": p["pieton"], "densite_zems": p["densite_zems"],
-                    "revetement": p["revetement"], "points": [[round(x, 2), round(y, 2)] for x, y in g.coords]} for g, p in roads if g.geom_type == "LineString"]
-    (out / "routes_local.json").write_text(json.dumps({"repere": "x est, y nord, metres ; dans le glTF : X = x, Z = -y", "routes": local_roads},
+                    "revetement": p["revetement"], "points": [[round(x, 2), round(y, 2), round(float(alt.hauteur(x, y)), 2)] for x, y in g.coords]} for g, p in roads if g.geom_type == "LineString"]
+    (out / "routes_local.json").write_text(json.dumps({"repere": "points [x, y, z] en metres : x est, y nord, z altitude du sol ; dans le glTF : X = x, Y = z, Z = -y", "routes": local_roads},
                                                       ensure_ascii=False, sort_keys=True), encoding="utf-8")
 
     # zones chargeables à la demande (étape optimisation)
