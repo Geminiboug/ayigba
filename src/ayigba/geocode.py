@@ -11,6 +11,7 @@ import urllib.request
 from pathlib import Path
 
 from .config import load_config
+from .style import preset_pour_pays
 
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = "ayigba/0.1 (generateur de cartes ; https://github.com/Geminiboug/ayigba)"
@@ -26,8 +27,8 @@ def slugify(texte: str) -> str:
 
 
 def geocode(nom: str, opener=urllib.request.urlopen, timeout=30) -> dict:
-    """Cherche un lieu ; renvoie {"lat", "lon", "nom_complet"}. Un seul appel, aucun nouvel essai."""
-    url = NOMINATIM + "?" + urllib.parse.urlencode({"q": nom, "format": "jsonv2", "limit": 1})
+    """Cherche un lieu ; renvoie {"lat", "lon", "nom_complet", "pays_code"} (code pays ISO en minuscules, ou vide). Un seul appel."""
+    url = NOMINATIM + "?" + urllib.parse.urlencode({"q": nom, "format": "jsonv2", "limit": 1, "addressdetails": 1})
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with opener(req, timeout=timeout) as rep:
@@ -46,6 +47,7 @@ def geocode(nom: str, opener=urllib.request.urlopen, timeout=30) -> dict:
             "lat": float(premier["lat"]),
             "lon": float(premier["lon"]),
             "nom_complet": str(premier.get("display_name", nom)),
+            "pays_code": str((premier.get("address") or {}).get("country_code", "")).lower(),
         }
     except (KeyError, TypeError, ValueError) as exc:
         raise RuntimeError("Réponse inattendue du service de géocodage.") from exc
@@ -96,6 +98,7 @@ def create_project(dossier_parent, nom: str, rayon_km: float = 1.5, graine: int 
     lieu = geocode(nom, opener=opener)
     ouest, sud, est, nord = bbox_around(lieu["lat"], lieu["lon"], rayon_km)
     commentaire = " ".join(lieu["nom_complet"].split())
+    preset = preset_pour_pays(lieu.get("pays_code"))
     contenu = (
         f"# Projet créé depuis le lieu : {commentaire}\n"
         "[ville]\n"
@@ -111,6 +114,12 @@ def create_project(dossier_parent, nom: str, rayon_km: float = 1.5, graine: int 
         "# Même entrée + même graine = même carte.\n"
         f"graine = {int(graine)}\n"
         'style = "defaut"\n'
+        "\n"
+        "[style]\n"
+        f"# Préréglage régional : {preset} (choisi d'après le pays « {lieu.get('pays_code') or 'inconnu'} »). Voir `ayigba styles`.\n"
+        f'preset = "{preset}"\n'
+        "# 0 = chaque bâtiment tire sa couleur seul ; plus la valeur est haute, plus les voisins se ressemblent.\n"
+        "coherence = 0.65\n"
         "\n"
         "[export]\n"
         '# "neutre" (glTF + GeoJSON).\n'

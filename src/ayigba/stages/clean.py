@@ -220,7 +220,7 @@ def _clean_buildings(raw: list[dict], zone: Polygon, journal) -> list[dict]:
 
 # ---------------------------------------------------------------- routes
 
-def _road_props(tags: dict) -> dict:
+def _road_props(tags: dict, revetues_par_defaut=None) -> dict:
     cls = tags["highway"]
     base = cls[:-5] if cls.endswith("_link") else cls
     width = _num(tags.get("width"))
@@ -237,7 +237,7 @@ def _road_props(tags: dict) -> dict:
     elif surface in UNPAVED:
         paved, guessed = False, False
     else:
-        paved, guessed = base in PAVED_BY_DEFAULT, True
+        paved, guessed = base in (PAVED_BY_DEFAULT if revetues_par_defaut is None else revetues_par_defaut), True
     oneway = tags.get("oneway") in ("yes", "1", "true", "-1") or tags.get("junction") == "roundabout"
     return {
         "classe": base, "nom": tags.get("name", ""), "largeur": round(width, 2), "largeur_supposee": width_guessed,
@@ -249,7 +249,7 @@ def _road_props(tags: dict) -> dict:
     }
 
 
-def _clean_roads(raw: list[dict], zone: Polygon, buildings: list[dict], journal) -> list[dict]:
+def _clean_roads(raw: list[dict], zone: Polygon, buildings: list[dict], journal, revetues_par_defaut=None) -> list[dict]:
     roads: list[dict] = []
     seen: dict[tuple, str] = {}
     for r in sorted(raw, key=lambda r: r["id"]):
@@ -261,7 +261,7 @@ def _clean_roads(raw: list[dict], zone: Polygon, buildings: list[dict], journal)
                 continue
             rid = r["id"] if len(parts) == 1 else f"{r['id']}#{k}"
             seen.setdefault(sig, rid)
-            roads.append({"id": rid, "line": ln, "tags": r["tags"], "props": _road_props(r["tags"]), "level": _level(r["tags"])})
+            roads.append({"id": rid, "line": ln, "tags": r["tags"], "props": _road_props(r["tags"], revetues_par_defaut), "level": _level(r["tags"])})
 
     boundary = zone.exterior
 
@@ -381,7 +381,7 @@ def _clean_roads(raw: list[dict], zone: Polygon, buildings: list[dict], journal)
             if math.dist(v1, v2) > 0.02:
                 ped = roads[k]["props"]["pieton"] or roads[j]["props"]["pieton"]
                 tags = {"highway": "path" if ped else "service"}
-                props = _road_props(tags)
+                props = _road_props(tags, revetues_par_defaut)
                 props["source"] = "genere"
                 rid = f"genere/lien-{roads[k]['id'].replace('/', '-')}-{roads[j]['id'].replace('/', '-')}"
                 roads.append({"id": rid, "line": LineString([v1, v2]), "tags": tags, "props": props, "level": roads[k]["level"]})
@@ -599,7 +599,8 @@ def run(ctx) -> dict:
         journal.record("info", what, f"{n} élément(s) de ce type ignoré(s) dans cette version")
 
     buildings = _clean_buildings(raw_buildings, zone, journal)
-    roads = _clean_roads(raw_roads, zone, buildings, journal)
+    from ..style import charger as _charger_style
+    roads = _clean_roads(raw_roads, zone, buildings, journal, _charger_style(ctx.config).revetues_par_defaut)
     roads, buildings = _resolve_road_building(roads, buildings, journal)
 
     # eau : polygones découpés à la zone, mer déduite de la côte, routes traitées comme des remblais

@@ -47,11 +47,11 @@ def test_slugify():
 def test_geocode_url_et_user_agent():
     op = FauxOpener(COTONOU)
     res = geocode("Porto-Novo, Bénin", opener=op)
-    assert res == {"lat": 6.36, "lon": 2.42, "nom_complet": "Cotonou, Littoral, Bénin"}
+    assert res == {"lat": 6.36, "lon": 2.42, "nom_complet": "Cotonou, Littoral, Bénin", "pays_code": ""}
     assert len(op.appels) == 1
     req = op.appels[0][0]
     assert req.full_url == (
-        "https://nominatim.openstreetmap.org/search?q=Porto-Novo%2C+B%C3%A9nin&format=jsonv2&limit=1"
+        "https://nominatim.openstreetmap.org/search?q=Porto-Novo%2C+B%C3%A9nin&format=jsonv2&limit=1&addressdetails=1"
     )
     assert req.get_header("User-agent") == "ayigba/0.1 (generateur de cartes ; https://github.com/Geminiboug/ayigba)"
 

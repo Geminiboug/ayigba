@@ -23,7 +23,9 @@ La cohérence passe avant la fidélité à 100 %. Une carte sans trou, sans mur 
 
 L'outil est indépendant de tout jeu : il ne contient ni missions, ni météo, ni scénario. Il produit une carte et ses données, c'est tout.
 
-## État actuel (version 0.7, 18/11/2026)
+## État actuel (version 0.8, 19/11/2026)
+
+- **Styles régionaux et cohérence entre voisins** : préréglages (Afrique de l'Ouest, Europe tempérée, Andes, générique) choisis d'après le pays, et quartiers de couleurs cohérentes au lieu d'un tirage indépendant par bâtiment (`[style]` dans config.toml, `ayigba styles`). Ce sont des choix de style, pas des mesures.
 
 - **Sources de bâtiments interchangeables** : une interface commune, une fusion unique (doublons, chaussées, découpe), licences et crédits automatiques. Microsoft Building Footprints est livrée (`[empreintes] sources = ["microsoft"]`, désactivée par défaut). `ayigba sources` liste les sources.
 

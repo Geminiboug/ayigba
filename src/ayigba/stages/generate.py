@@ -24,33 +24,20 @@ from ..props import CATALOGUE, place
 from ..terrain import BED_DEPTH, build_ground, shore_walls
 from .clean import _polygons
 from .. import batiments25d, carrefours
+from ..style import AFRIQUE_DE_L_OUEST, Style, Teinte, charger as charger_style, coherence_voisins
 from .relief import altitudes, batiments, vers_donnees
 
 STAGE = "generation"
 
 SIDEWALK_CLASSES = {"trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "living_street"}
-SIDEWALK = (0.63, 0.62, 0.59)
-SAND = (0.78, 0.69, 0.52)
-LATERITE = (0.72, 0.52, 0.36)
-PAINT = (0.92, 0.92, 0.89)
-ASPHALT = (0.23, 0.23, 0.25)
-TARMAC = (0.33, 0.33, 0.35)
-WATER = (0.16, 0.38, 0.47)
-BED = (0.45, 0.41, 0.33)
-WALLS = [(0.86, 0.80, 0.68), (0.90, 0.86, 0.78), (0.80, 0.70, 0.55), (0.93, 0.91, 0.87), (0.76, 0.74, 0.70), (0.85, 0.73, 0.66), (0.70, 0.76, 0.72)]
-ROOFS = [(0.55, 0.56, 0.58), (0.47, 0.36, 0.30), (0.62, 0.62, 0.60), (0.40, 0.42, 0.45), (0.52, 0.30, 0.24)]
 
 
-def _estimate_height(rng, area: float, kind: str) -> float:
+def _estimate_height(rng, area: float, kind: str, style: Style = AFRIQUE_DE_L_OUEST) -> float:
     """Hauteur vraisemblable quand OSM ne la donne pas. Règle simple, à remplacer par l'analyse de quartier."""
     if kind in ("roof", "shed", "hut", "kiosk", "garage", "carport") or area < 30:
         return round(rng.uniform(2.6, 3.2), 2)
-    if area < 250:
-        levels = rng.choices([1, 2, 3], weights=[70, 24, 6])[0]
-    elif area < 1200:
-        levels = rng.choices([1, 2, 3, 4], weights=[45, 30, 17, 8])[0]
-    else:
-        levels = rng.choices([1, 2, 3], weights=[55, 30, 15])[0]
+    poids = style.etages_petit if area < 250 else style.etages_moyen if area < 1200 else style.etages_grand
+    levels = rng.choices(list(range(1, len(poids) + 1)), weights=list(poids))[0]
     return round(levels * 3.0 + rng.uniform(0.3, 0.9), 2)
 
 
@@ -60,6 +47,10 @@ def run(ctx) -> dict:
     frame = LocalFrame(ctx.config.bbox)
     zone = frame.zone_polygon()
     seed = ctx.config.seed
+    style = charger_style(ctx.config)
+    teinte = Teinte(style, seed)
+    couleurs_murs: list[tuple[float, float, float]] = []
+    centres_murs: list[tuple[float, float]] = []
 
     filled = ctx.project.work / "secours"  # routes et bâtiments après l'étape de secours (réels + générés)
     roads = read_features(filled / "roads.geojson")
@@ -132,17 +123,17 @@ def run(ctx) -> dict:
     ground = build_ground(zone, parts, alt.hauteur, max_area=float(ctx.config.option("terrain", "aire_max_m2", 400.0)))
 
     terrain = MeshBuilder("terrain")
-    terrain._add(ground.triangles_of(["terre"]), SAND)
+    terrain._add(ground.triangles_of(["terre"]), style.sol)
     finish(terrain, True, "terre nue, drapée sur le relief")
 
     berges = MeshBuilder("berges")
-    berges._add(shore_walls(ground), BED)  # pas de vide entre la terre et l'eau
+    berges._add(shore_walls(ground), style.fond)  # pas de vide entre la terre et l'eau
     finish(berges, True, "berges verticales entre le sol et le fond de l'eau")
 
     chaussee = MeshBuilder("chaussees")
-    chaussee._add(ground.triangles_of(["revetu"]), ASPHALT)
-    chaussee._add(ground.triangles_of(["marquage"]), PAINT)
-    chaussee._add(ground.triangles_of(["non_revetu"]), LATERITE)
+    chaussee._add(ground.triangles_of(["revetu"]), style.asphalte)
+    chaussee._add(ground.triangles_of(["marquage"]), style.peinture)
+    chaussee._add(ground.triangles_of(["non_revetu"]), style.laterite)
     finish(chaussee, True, "chaussées revêtues et non revêtues, pistes d'aéroport, passages piétons peints")
     if junctions:
         n_bars = len(getattr(paint_part, "geoms", [paint_part])) if paint_part is not None else 0
@@ -153,13 +144,13 @@ def run(ctx) -> dict:
     # 17/11/2026 : des faces presque verticales bloquaient les bots piétons. Une bordure ne reviendra que si chaque face
     # est garantie franchissable.
     trottoirs = MeshBuilder("trottoirs")
-    trottoirs._add(ground.triangles_of(["trottoir"]), SIDEWALK)
+    trottoirs._add(ground.triangles_of(["trottoir"]), style.trottoir)
     finish(trottoirs, True, "trottoirs au niveau de la chaussée, sans bordure")
 
     eau = MeshBuilder("eau")
     fond = MeshBuilder("fond_eau")
-    eau._add(ground.triangles_of(["eau"], dz=0.0), WATER)
-    fond._add(ground.triangles_of(["eau"], dz=-BED_DEPTH), BED)
+    eau._add(ground.triangles_of(["eau"], dz=0.0), style.eau)
+    fond._add(ground.triangles_of(["eau"], dz=-BED_DEPTH), style.fond)
     finish(eau, False, "surface de l'eau")
     finish(fond, True, "fond de l'eau")
 
@@ -185,10 +176,14 @@ def run(ctx) -> dict:
                 source_h = "google_25d"
                 measured += 1
         if height is None:
-            height = _estimate_height(rng, geom.area, props.get("type", "yes"))
+            height = _estimate_height(rng, geom.area, props.get("type", "yes"), style)
             source_h = "genere"
             estimated += 1
-        wall, roof = rng.choice(WALLS), rng.choice(ROOFS)
+        wall, roof = teinte.choisir(geom.centroid.x, geom.centroid.y, rng)
+        hex_mur, hex_toit = "#%02x%02x%02x" % tuple(round(v * 255) for v in wall), "#%02x%02x%02x" % tuple(round(v * 255) for v in roof)
+        if props.get("type") != "roof":
+            couleurs_murs.append(wall)
+            centres_murs.append((geom.centroid.x, geom.centroid.y))
         # altitude du sol sous l'emprise : le bâtiment repose sur le point le plus bas (et s'enfonce de 30 cm), son toit est
         # à la hauteur indiquée au-dessus du point le plus haut
         edge = np.concatenate([np.asarray(q.exterior.coords) for q in _polygons(geom)])
@@ -206,7 +201,7 @@ def run(ctx) -> dict:
                     post = Point(cx, cy).buffer(0.12, quad_segs=1)
                     if part.contains(Point(cx, cy)) and (road_all is None or road_all.distance(Point(cx, cy)) > 0.6):
                         bati.add_walls(post, float(alt.hauteur(cx, cy)) - 0.3, top - 0.25, (0.45, 0.45, 0.47))
-            final_buildings.append((geom, {**props, "hauteur": height, "hauteur_source": source_h, "base": round(low - 0.3, 2), "sommet": round(top, 2)}))
+            final_buildings.append((geom, {**props, "hauteur": height, "hauteur_source": source_h, "base": round(low - 0.3, 2), "sommet": round(top, 2), "couleur_toit": hex_toit}))
             continue
         top = high + height
         # toit à deux pentes : choix de style (les données ne disent pas la forme des toits), seulement pour les petits bâtiments
@@ -222,6 +217,7 @@ def run(ctx) -> dict:
         if ridge is not None:
             pitched += 1
         final_buildings.append((geom, {**props, "hauteur": height, "hauteur_source": source_h, "base": round(low - 0.3, 2), "sommet": round(top, 2),
+                                       "couleur_mur": hex_mur, "couleur_toit": hex_toit,
                                        **({"toit": "deux_pentes", "faitage_m": round(ridge, 2)} if ridge is not None else {})}))
     finish(bati, True, "volumes des bâtiments (toits plats ou à deux pentes), posés sur le relief")
     if pitched:
@@ -252,7 +248,11 @@ def run(ctx) -> dict:
                            par_type={t: sum(1 for i in items if i["type"] == t) for t in sorted({i["type"] for i in items})})
 
     (out / "scene.json").write_text(json.dumps({"couches": layers, "niveau_eau": "propre à chaque plan d'eau (voir ayigba.terrain)", "altitudes": relief}, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
+    mesure = coherence_voisins(np.array(centres_murs), np.array(couleurs_murs), graine=seed % 100000) if centres_murs else {}
+    ctx.journal.record("info", "style", f"préréglage de style « {style.nom} » ({style.note}) ; cohérence entre voisins : {style.coherence:g} ; "
+                       f"distance de couleur des murs entre voisins / entre bâtiments au hasard : {mesure.get('rapport')} (moins de 1 = voisins plus semblables ; style, pas fidélité)")
     return {
+        "style": {"preset": style.nom, "coherence": style.coherence, "taille_quartier_m": style.taille_quartier_m, "murs_voisins_sur_hasard": mesure.get("rapport")},
         "triangles": sum(layer["triangles"] for layer in layers),
         "couches": {layer["nom"]: layer["triangles"] for layer in layers},
         "batiments": len(buildings), "toits_deux_pentes": pitched, "hauteurs_estimees": estimated, "hauteurs_mesurees_25d": measured, "decors": len(items), "altitudes_m": relief,

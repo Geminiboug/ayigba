@@ -56,12 +56,19 @@ def main(argv: list[str] | None = None) -> int:
                      help="écrit dans config.toml les identifiants de score >= X à exclure à la prochaine génération (rien n'est exclu sans cette option)")
 
     sub.add_parser("sources", help="liste les sources d'empreintes de bâtiments disponibles, avec leur licence")
+    sub.add_parser("styles", help="liste les préréglages de style (couleurs, étages, rues revêtues)")
     sub.add_parser("etapes", help="liste les étapes du pipeline")
     args = parser.parse_args(argv)
 
     try:
         if args.commande == "etapes":
             print(" -> ".join(STAGE_NAMES))
+        elif args.commande == "styles":
+            from . import style
+            print("Préréglages de style (à choisir dans config.toml : [style] preset = \"...\") :")
+            for nom, st in sorted(style.PRESETS.items()):
+                print(f"  {nom:<20} {st.note}")
+            print("Surcharges possibles dans [style] : sol, laterite, asphalte, trottoir, eau, murs, toits (couleurs [r, g, b] ou \"#rrggbb\"), coherence (0 à 1), taille_quartier_m.")
         elif args.commande == "sources":
             from . import empreintes
             print("Sources d'empreintes disponibles (à activer dans config.toml : [empreintes] sources = [\"id\", ...]) :")
