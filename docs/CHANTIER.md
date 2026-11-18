@@ -105,6 +105,39 @@ Même entrée et même graine donnent les mêmes fichiers (test automatique). Au
 7. **Style par quartier** : règles puis classification d'images, sur les photos d'Olympe uniquement.
 8. **Test réel d'Unity et d'Unreal**, puis Porto-Novo et Parakou.
 
+## Test hors du Bénin (18/11/2026)
+
+Deux zones de 1,4 km², créées par `ayigba creer` (rayon 0,6 km) et générées de bout en bout, en ligne :
+
+| | Croix-Rousse, Lyon (France) | Cusco (Pérou) |
+|---|---|---|
+| Ce que la zone teste | hors couverture Open Buildings 2.5D, colline, hémisphère nord et est | latitude et longitude négatives, altitude 3 356 à 3 614 m |
+| Bâtiments | 3 590 (dont 358 générés) | 1 628 (dont 58 générés) |
+| Hauteurs | 2 034 estimées, 0 mesurée (pas de 2.5D : le message « zone non couverte » est journalisé, rien ne plante) | 1 572 estimées ; la couverture 2.5D n'est que de 0,33 %, 36 pixels de relief corrigés |
+| Pente maximale du sol | 30,7 degrés (avertissement : donnée peut-être bruitée) | 32,1 degrés (idem) |
+| Erreurs de qualité | 0 | 0 |
+| Triangles | 332 311 | 96 714 |
+
+Deux défauts trouvés par ce test, corrigés : (1) `carrefours.arrondir` recalculait un tampon de tout le réseau de rues pour chaque pièce : la génération de Lyon prenait 2 092 s, elle prend 42 s avec un résultat identique ; (2) la boucle de comblement des poches fermées ne voyait pas une poche de 416 m2 à Cusco, parce que le tampon de 2 cm de l'union de quatre bâtiments voisins recouvrait toute la poche (défaut de la géométrie quand des bâtiments se touchent presque) : un second calcul sert de secours. Les deux zones avaient 1 erreur de qualité avant ces corrections.
+
+Ce que ce test NE démontre PAS : les garde-fous du sol nu n'ont pas été éprouvés sur une vraie colline couverte par le 2.5D (Cusco n'a presque pas de couverture, Lyon aucune) ; il faut une zone en pente AVEC couverture, par exemple une ville de montagne d'Amérique latine ou d'Asie du Sud. Aucun contrôle visuel dans Godot, aucun bot lancé sur ces deux zones. La zone Lyon est rendue avec les couleurs de sable et de latérite, les teintes de murs et de toits et les largeurs de rue pensées pour le Bénin : ces constantes régionales sont encore codées en dur dans `stages/generate.py` (`SAND`, `LATERITE`, `WALLS`, `ROOFS`, `_estimate_height`) et `stages/clean.py` (`ROAD_WIDTH`, `PAVED_BY_DEFAULT`) ; elles sont à déplacer dans la configuration, ce qui rejoint le chantier des textures. Autre limite vue à Lyon : 318 cours intérieures ont été comblées par des volumes pleins parce que les données ne montrent aucun passage vers la rue.
+
+## Textures cohérentes et fidèles (demande d'Olympe, 18/11/2026, pas commencé)
+
+Objectif : l'outil sait choisir et appliquer des textures et des matériaux de façon COHÉRENTE entre bâtiments voisins et FIDÈLE à la réalité du lieu, quel que soit le lieu (pas seulement le Bénin). Un « agent de style » cherche des références, en tire un profil de quartier, applique des textures existantes, et en GÉNÈRE par IA là où il en manque, en le disant.
+
+État aujourd'hui : l'export n'a ni texture ni coordonnées de texture ; chaque bâtiment a seulement un matériau de couleur tiré au hasard (graine) parmi des listes codées dans `stages/generate.py` (`WALLS`, `ROOFS`), donc deux voisins peuvent diverger. Les données libres ne disent presque rien du matériau ou de la couleur (OSM : 0 tag `building:colour`, `building:material` ou `roof:shape` sur Cadjèhoun et Ouidah).
+
+Principes retenus :
+- Fidélité au niveau du QUARTIER et du type de bâtiment, pas du bâtiment, sauf là où une photo de référence existe. Ne jamais prétendre le contraire.
+- Cohérence : un profil de style par quartier (palette, matériaux, usure, types de toit), appliqué avec un lissage spatial (les voisins partagent le style, avec des variations contrôlées), au lieu d'un tirage indépendant par bâtiment.
+- Références : (1) photos fournies par l'utilisateur dans un dossier du projet, la voie la plus fidèle et la plus sûre juridiquement ; (2) sources libres : Mapillary (jeton gratuit à créer par l'utilisateur ; photos CC BY-SA : on en tire des statistiques de couleur et de matière, jamais les pixels recopiés), Sentinel-2 pour la couleur du sol et des toits à 10 m ; (3) textures libres CC0 (ambientCG, Poly Haven) avec licence enregistrée.
+- Génération par IA seulement pour les matériaux manquants : textures carrelables, produites à partir du profil de style (couleurs, usure, climat), marquées `genere` dans le journal et dans les crédits, avec une planche de contrôle à valider avant l'export. Le fournisseur (API payante ou modèle local) reste à décider avec Olympe : la carte graphique actuelle (RTX 2050) est limitée pour un modèle local.
+- Jamais d'images, de tuiles ou de 3D tirées de Google Maps ou Street View (conditions d'utilisation).
+- Aucune logique de jeu : l'outil exporte des matériaux et des textures ; l'application dans le moteur se fait par les adaptateurs.
+
+Phases proposées : 1) profil de style par quartier et lissage spatial, avec couleurs seulement (sans clé ni réseau) ; 2) coordonnées de texture et textures CC0 carrelables dans le glTF (budget de poids à mesurer) ; 3) références utilisateur et extraction de palette ; 4) Mapillary ; 5) génération IA des textures manquantes ; 6) mode agent qui enchaîne recherche, profil, génération et contrôle.
+
 ## Pièges rencontrés
 
 - Arrondir les coordonnées d'un polygone peut le rendre invalide : `geo.write_features` le recale avec `shapely.set_precision`.

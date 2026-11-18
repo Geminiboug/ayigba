@@ -267,6 +267,10 @@ def run(ctx) -> dict:
                 # le volume plein ne doit mordre sur aucun bâtiment voisin (abris ouverts compris)
                 around = [all_geoms[k] for k in all_tree.query(pocket).tolist()]
                 core = pocket.difference(unary_union(around).buffer(0.02)) if around else pocket
+                if around and core.area < 1.0 and pocket.area >= 4.0:
+                    # le tampon de 2 cm de l'union des bâtiments voisins peut boucher TOUTE la poche (défaut de la géométrie quand des
+                    # bâtiments se touchent presque : vu à Cusco, poche de 416 m2) : on retire les bâtiments puis on rétrécit la pièce
+                    core = pocket.difference(unary_union(around)).buffer(-0.02)
                 for piece in [q for q in polygons(core) if q.area >= 1.0]:
                     c = piece.centroid
                     pid = f"genere/cour-{round(c.x)}_{round(c.y)}-{courtyards}"

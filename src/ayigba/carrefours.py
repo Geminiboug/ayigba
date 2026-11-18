@@ -14,6 +14,9 @@ bras, une rue qui s'arrête contre une autre pour un). Les ponts, tunnels, chemi
 from __future__ import annotations
 
 import math
+
+import numpy as np
+import shapely
 from dataclasses import dataclass, field
 
 from shapely.geometry import LineString, MultiPolygon, Point, Polygon
@@ -106,11 +109,19 @@ def noeuds(routes: list[tuple[LineString, dict]]) -> list[Carrefour]:
     return res
 
 
-def _a_un_bord_libre(piece: Polygon, chaussee: object, minimum_m: float = 0.5) -> bool:
+def _a_un_bord_libre(piece: Polygon, chaussee_preparee, minimum_m: float = 0.5, pas_m: float = 0.25) -> bool:
     """Vrai si la pièce a un bord qui ne longe pas la chaussée : c'est un congé de coin. Une pièce dont tout le bord longe la
-    chaussée est un îlot entouré de chaussée (terre-plein, îlot de carrefour) : on ne le comble pas."""
-    libre = piece.exterior.difference(chaussee.buffer(1e-3))
-    return libre.length >= minimum_m
+    chaussée est un îlot entouré de chaussée (terre-plein, îlot de carrefour) : on ne le comble pas.
+
+    On échantillonne le contour tous les `pas_m` et on compte les points hors de la chaussée (déjà élargie de 1 mm et préparée :
+    le test est indexé, donc rapide même sur un réseau de rues de ville entière). Une version qui recalculait un tampon de tout
+    le réseau pour chaque pièce prenait 35 minutes sur un quartier dense.
+    """
+    anneau = piece.exterior
+    n = max(int(anneau.length / pas_m), 4)
+    points = shapely.line_interpolate_point(anneau, np.linspace(0.0, anneau.length, n, endpoint=False))
+    hors = int((~shapely.contains(chaussee_preparee, points)).sum())
+    return hors * (anneau.length / n) >= minimum_m
 
 
 def arrondir(chaussee: object, carrefours: list[Carrefour], rayon_m: float = 4.0, distance_m: float = 16.0, aire_max_m2: float = 80.0):
@@ -126,9 +137,11 @@ def arrondir(chaussee: object, carrefours: list[Carrefour], rayon_m: float = 4.0
     if ajout.is_empty:
         return None
     zone = unary_union([c.point.buffer(distance_m) for c in carrefours])
+    chaussee_preparee = chaussee.buffer(1e-3)
+    shapely.prepare(chaussee_preparee)
     pieces = [p for p in (ajout.geoms if hasattr(ajout, "geoms") else [ajout])
               if p.geom_type == "Polygon" and p.area <= aire_max_m2 and p.area > 0.05 and p.intersects(zone)
-              and _a_un_bord_libre(p, chaussee)]
+              and _a_un_bord_libre(p, chaussee_preparee)]
     return unary_union(pieces) if pieces else None
 
 
