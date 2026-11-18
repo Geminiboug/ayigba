@@ -55,12 +55,20 @@ def main(argv: list[str] | None = None) -> int:
     ctl.add_argument("--exclure-score", type=int, metavar="X",
                      help="écrit dans config.toml les identifiants de score >= X à exclure à la prochaine génération (rien n'est exclu sans cette option)")
 
+    sub.add_parser("sources", help="liste les sources d'empreintes de bâtiments disponibles, avec leur licence")
     sub.add_parser("etapes", help="liste les étapes du pipeline")
     args = parser.parse_args(argv)
 
     try:
         if args.commande == "etapes":
             print(" -> ".join(STAGE_NAMES))
+        elif args.commande == "sources":
+            from . import empreintes
+            print("Sources d'empreintes disponibles (à activer dans config.toml : [empreintes] sources = [\"id\", ...]) :")
+            print("  osm            OpenStreetMap, toujours utilisée (ODbL 1.0)")
+            print("  google_25d     Google Open Buildings 2.5D, détection des bâtiments absents d'OSM : [batiments25d] detecter (CC BY 4.0)")
+            for c in empreintes.disponibles():
+                print(f"  {c.id:<14} {c.nom} ({c.licence}) : {c.url_source}")
         elif args.commande == "creer":
             folder = geocode.create_project(args.dossier, args.lieu, rayon_km=args.rayon_km, graine=args.graine)
             print(f"Projet créé : {folder}\nVérifie la zone dans {folder / 'config.toml'}, puis lance : ayigba generer {folder}")

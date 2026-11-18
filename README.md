@@ -23,7 +23,9 @@ La cohérence passe avant la fidélité à 100 %. Une carte sans trou, sans mur 
 
 L'outil est indépendant de tout jeu : il ne contient ni missions, ni météo, ni scénario. Il produit une carte et ses données, c'est tout.
 
-## État actuel (version 0.6, 18/11/2026)
+## État actuel (version 0.7, 18/11/2026)
+
+- **Sources de bâtiments interchangeables** : une interface commune, une fusion unique (doublons, chaussées, découpe), licences et crédits automatiques. Microsoft Building Footprints est livrée (`[empreintes] sources = ["microsoft"]`, désactivée par défaut). `ayigba sources` liste les sources.
 
 - **Carrefours** : coins de rue arrondis et passages piétons peints sur les grandes rues (règle de style générale, réglable dans `[carrefours]`).
 

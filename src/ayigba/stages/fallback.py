@@ -26,8 +26,10 @@ from shapely.ops import nearest_points, polygonize, unary_union
 
 from ..access import analyse, polygons
 from ..detection import detecter, filtrer_fragments
-from .. import batiments25d
+from .. import batiments25d, empreintes
 from .relief import batiments, vers_donnees, vers_local
+import shapely
+
 from ..geo import LocalFrame, read_features, write_features
 from ..mesh import rng_for
 
@@ -88,6 +90,16 @@ def _connect_isolated(roads: list, solids_tree, solids: list, water, journal) ->
         else:
             kept.append([geom, props])
     return kept, links, removed
+
+
+def _comme_ecrit(features: list) -> list:
+    """Les bâtiments tels que write_features les écrira : recalés sur la grille du millimètre, ceux qui disparaissent sont retirés."""
+    res = []
+    for g, p in features:
+        g2 = shapely.set_precision(g, 1e-3) if g.geom_type in ("Polygon", "MultiPolygon") else g
+        if not g2.is_empty and g2.geom_type in ("Polygon", "MultiPolygon"):
+            res.append((g2, p))
+    return res
 
 
 def _fill_blocks(zone, roads: list, buildings: list, landuse: list, surfaces: list, water, seed: int, journal, max_density: float) -> list:
@@ -175,6 +187,7 @@ def run(ctx) -> dict:
 
     links = removed = filled = courtyards = fragments = 0
     detected = []
+    supplementaires: dict[str, int] = {}
     wet = 0
     if active:
         solids = [g for g, p in buildings if p.get("type") != "roof"]
@@ -214,19 +227,41 @@ def run(ctx) -> dict:
         else:
             detected = []
 
+        # sources d'empreintes supplémentaires, choisies dans config.toml : [empreintes] sources = ["microsoft"]
+        noms = [str(n) for n in ctx.config.option("empreintes", "sources", [])]
+        if noms:
+            interdit_s = unary_union([g.buffer(p["largeur"] / 2.0 + 0.5) for g, p in roads if not p["tunnel"]] + ([water] if water is not None else []))
+            for nom in noms:
+                source = empreintes.obtenir(nom)
+                cands = source.collecter(ctx, frame, zone)
+                gardes, rejets = empreintes.fusionner([g for g, _ in buildings], cands, interdit_s)
+                ajoutes = [(cands[k].geom, {"id": cands[k].identifiant or f"{source.id}/{round(cands[k].geom.centroid.x)}_{round(cands[k].geom.centroid.y)}_{k}",
+                                            "hauteur": cands[k].hauteur, "type": "yes", "nom": "", "toit": "", "source": source.id}) for k in gardes]
+                buildings = buildings + ajoutes
+                supplementaires[source.id] = len(ajoutes)
+                journal.record("genere", source.id, f"{len(ajoutes)} bâtiment(s) ajouté(s) depuis la source « {source.nom} » ({len(cands)} candidats ; "
+                               f"écartés : {rejets['doublon']} doublons de bâtiments déjà connus, {rejets['chaussee_ou_eau']} sur chaussée ou eau, "
+                               f"{rejets['surface']} de surface hors limites, {rejets['invalide']} géométries invalides)", nombre=len(ajoutes), candidats=len(cands), rejets=rejets)
+
         new = _fill_blocks(zone, roads, buildings, landuse, surfaces, water, ctx.config.seed, journal,
                            float(ctx.config.option("secours", "densite_ilot_vide", 0.0)))
         filled = len(new)
         buildings = buildings + new
 
-        for attempt in range(3):
-            solids = [g for g, p in buildings if p.get("type") != "roof"]
+        # le comblement d'une poche peut en faire apparaître une autre (quartier dense) : on recommence tant qu'il progresse
+        for attempt in range(8):
+            avant = courtyards
+            # on analyse les géométries telles qu'elles seront ÉCRITES (même recalage sur la grille du millimètre que write_features) :
+            # un interstice de moins de 1 mm entre deux bâtiments n'existe pas dans le fichier, et l'étape de contrôle verrait sinon une
+            # poche que cette boucle ne voit pas
+            vus = _comme_ecrit(buildings)  # copie d'analyse : les bâtiments eux-mêmes ne sont pas modifiés
+            solids = [g for g, p in vus if p.get("type") != "roof"]
             seeds = [g for g, p in roads if not p["pieton"] and not p["tunnel"]]
             result = analyse(zone, solids, water_list, seeds)
             wet = len(result.wet_pockets)
             if not result.pockets:
                 break
-            all_geoms = [g for g, _ in buildings]
+            all_geoms = [g for g, _ in vus]
             all_tree = STRtree(all_geoms)
             for pocket in sorted(result.pockets, key=lambda q: (round(q.centroid.x, 1), round(q.centroid.y, 1))):
                 # le volume plein ne doit mordre sur aucun bâtiment voisin (abris ouverts compris)
@@ -239,6 +274,8 @@ def run(ctx) -> dict:
                                               "source": "genere", "raison": "poche_fermee"}))
                     journal.record("genere", pid, f"espace fermé de {piece.area:.0f} m2 inaccessible à pied : comblé par un volume plein")
                     courtyards += 1
+            if courtyards == avant:
+                break
         for piece in (result.wet_pockets if active else []):
             c = piece.centroid
             journal.record("signale", f"ile/{round(c.x)}_{round(c.y)}", f"terrain de {piece.area:.0f} m2 bordé par l'eau, inaccessible à pied (île ou berge) : laissé tel quel")
@@ -249,5 +286,5 @@ def run(ctx) -> dict:
     buildings = sorted(buildings, key=lambda b: b[1]["id"])
     write_features(out / "roads.geojson", [(g, p) for g, p in roads], extra=extra)
     write_features(out / "buildings.geojson", buildings, extra=extra)
-    return {"batiments_detectes": len(detected) if active else 0, "fragments_retires": fragments, "liens_crees": links, "routes_isolees_retirees": removed, "batiments_generes": filled, "poches_comblees": courtyards,
+    return {"batiments_detectes": len(detected) if active else 0, "sources_supplementaires": supplementaires, "fragments_retires": fragments, "liens_crees": links, "routes_isolees_retirees": removed, "batiments_generes": filled, "poches_comblees": courtyards,
             "terrains_bordes_eau": wet, "elements_generes": links + filled + courtyards}
