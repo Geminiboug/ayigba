@@ -25,8 +25,9 @@ from shapely.geometry import LineString, Point, box
 from shapely.ops import nearest_points, polygonize, unary_union
 
 from ..access import analyse, polygons
-from ..detection import detecter
-from .relief import batiments, vers_local
+from ..detection import detecter, filtrer_fragments
+from .. import batiments25d
+from .relief import batiments, vers_donnees, vers_local
 from ..geo import LocalFrame, read_features, write_features
 from ..mesh import rng_for
 
@@ -172,7 +173,7 @@ def run(ctx) -> dict:
     surfaces = read_features(src / "surfaces.geojson")
     extra = {"repere": {"epsg": frame.epsg, "lon0": frame.lon0, "lat0": frame.lat0, "unite": "metre", "axes": "x est, y nord"}}
 
-    links = removed = filled = courtyards = 0
+    links = removed = filled = courtyards = fragments = 0
     detected = []
     wet = 0
     if active:
@@ -194,6 +195,18 @@ def run(ctx) -> dict:
                 journal.record("supprime", "batiments25d", f"{len(retires)} bâtiment(s) détecté(s) exclu(s) à la demande de l'utilisateur "
                                f"(liste « exclure » de config.toml, {len(exclure)} identifiants dont {inconnus} sans correspondance)",
                                nombre=len(retires), identifiants_sans_correspondance=inconnus)
+            if detected and bool(ctx.config.option("batiments25d", "fragments_actif", True)):
+                surf = float(ctx.config.option("batiments25d", "fragment_surface_m2", 20.0))
+                haut = float(ctx.config.option("batiments25d", "fragment_hauteur_m", 2.4))
+                voisin = float(ctx.config.option("batiments25d", "fragment_voisin_m", 3.0))
+                mesure, en_donnees = batiments25d.Hauteurs(bat), vers_donnees(frame, bat["epsg"])
+                cand = [(g, mesure.pour_emprise(en_donnees(g)) if g.area < surf else None) for g, _ in detected]
+                gardes, ret = filtrer_fragments(cand, [g for g, _ in buildings], surf, haut, voisin)
+                fragments = len(ret)
+                detected = [detected[k] for k in gardes]
+                journal.record("supprime", "batiments25d", f"{len(ret)} fragment(s) douteux retiré(s) parmi les détections : surface < {surf:g} m2 et "
+                               f"(hauteur < {haut:g} m ou à {voisin:g} m ou moins d'un bâtiment plus grand) ; ce sont des indices, pas une vérité terrain",
+                               nombre=len(ret), surface_m2=surf, hauteur_m=haut, voisin_m=voisin)
             buildings = buildings + detected
             if detected:
                 journal.record("genere", "batiments25d", f"{len(detected)} bâtiment(s) absent(s) d'OpenStreetMap ajouté(s) d'après la détection Google Open Buildings 2.5D "
@@ -236,5 +249,5 @@ def run(ctx) -> dict:
     buildings = sorted(buildings, key=lambda b: b[1]["id"])
     write_features(out / "roads.geojson", [(g, p) for g, p in roads], extra=extra)
     write_features(out / "buildings.geojson", buildings, extra=extra)
-    return {"batiments_detectes": len(detected) if active else 0, "liens_crees": links, "routes_isolees_retirees": removed, "batiments_generes": filled, "poches_comblees": courtyards,
+    return {"batiments_detectes": len(detected) if active else 0, "fragments_retires": fragments, "liens_crees": links, "routes_isolees_retirees": removed, "batiments_generes": filled, "poches_comblees": courtyards,
             "terrains_bordes_eau": wet, "elements_generes": links + filled + courtyards}

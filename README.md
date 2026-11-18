@@ -23,7 +23,9 @@ La cohérence passe avant la fidélité à 100 %. Une carte sans trou, sans mur 
 
 L'outil est indépendant de tout jeu : il ne contient ni missions, ni météo, ni scénario. Il produit une carte et ses données, c'est tout.
 
-## État actuel (version 0.6, 17/11/2026)
+## État actuel (version 0.6, 18/11/2026)
+
+- **Carrefours** : coins de rue arrondis et passages piétons peints sur les grandes rues (règle de style générale, réglable dans `[carrefours]`).
 
 Ce qui marche, vérifié sur deux lieux : Cadjèhoun à Cotonou (7,3 km², 4 302 bâtiments, altitudes de 0.0 à 8.41 m) et Ouidah (8,9 km², 7 985 bâtiments, altitudes de 2.67 à 24.04 m).
 
@@ -40,14 +42,15 @@ Ce qui marche, vérifié sur deux lieux : Cadjèhoun à Cotonou (7,3 km², 4 302
 - **Export** : glTF (carte entière et zones), GeoJSON, routes en mètres pour le GPS, liste des décors, manifeste, fichier de crédits. Adaptateur Godot fourni.
 - **Suivi** : instantanés, comparaison avant/après, retour en arrière (`ayigba instantane`, `comparer`, `restaurer`).
 - **Contrôle des détections IA** : `ayigba controler-detections <projet>` calcule, sans réseau, des indices de suspicion sur les bâtiments `google_25d` (surface, allongement, hauteur, densité locale, proximité de l'eau ou d'une route, rectangularité, présence moyenne), un score simple, la liste des 20 plus suspects avec leurs coordonnées (lat, lon) et une planche de 24 vignettes (8 plus suspects, 8 au hasard, 8 plus sûrs). **Ce sont des indices de suspicion, pas la vérité terrain** : le score n'est pas une probabilité d'erreur, et ces indices ne remplacent pas une vérification sur carte ou image satellite. Voir [une planche exemple](docs/images/controle_detections_cotonou.png).
-- **Reproductible** : même entrée et même graine donnent les mêmes fichiers. 215 tests automatiques.
+- **Filtre de fragments douteux** : parmi les bâtiments détectés (`google_25d`), l'étape secours retire par défaut les très petites taches (surface < 20 m2) qui sont soit basses (hauteur médiane < 2,4 m), soit collées (à 3 m ou moins) à un bâtiment plus grand, probablement des résidus (tôles, débris, franges). Une détection de 20 m2 ou plus n'est jamais touchée, ni une petite construction isolée de hauteur normale (kiosque, cabine). Réglable dans `config.toml`, section `[batiments25d]` : `fragments_actif` (true), `fragment_surface_m2` (20), `fragment_hauteur_m` (2.4), `fragment_voisin_m` (3.0). Le nombre retiré et les seuils sont journalisés dans `logs/decisions.jsonl` (action `supprime`) et dans le résumé de l'étape (`fragments_retires`). Aucun réglage propre à un pays ; ce sont des seuils prudents, sans vérité terrain pour les valider.
+- **Reproductible** : même entrée et même graine donnent les mêmes fichiers. 263 tests automatiques.
 
 Ce qui n'est pas fait ou pas vérifié :
 
 - relief plus fin que 30 m, arbres non retirés du relief, toits autres qu'à deux pentes (les petits bâtiments rectangulaires ont un toit à deux pentes par choix de style, réglable dans `[toits]`), façades, bordures de trottoir, carrefours dessinés, ponts (rendus comme des remblais) ;
 - bâtiments détectés par IA non contrôlés sur le terrain (faux positifs ou fusions possibles) : l'outil sait les trier par indices de suspicion, mais leur exactitude réelle n'est pas mesurée ;
 - bots hors des routes, navmesh, vrai véhicule à roues ;
-- adaptateurs Unity et Unreal : écrits mais jamais testés, faute de moteur disponible ;
+- adaptateurs Unity et Unreal : écrits mais jamais lancés dans leur moteur, faute de moteur disponible. Ce qui est vérifié sans moteur : les glTF passent le validateur officiel Khronos (0 erreur, 0 avertissement) et un test automatique contrôle indices 32 bits, valeurs finies, accesseurs, noms et manifeste (`tests/test_export_conformite.py`, `tools/valider_gltf.js`) ;
 - interface graphique, IA de style, édition manuelle ;
 - aucune comparaison avec le terrain réel ;
 - Windows natif non testé pour l'outil lui-même : il a tourné sous Linux (WSL), Godot sous Windows.

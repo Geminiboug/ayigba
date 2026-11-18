@@ -1,6 +1,6 @@
 """Adaptateur Unreal pour un dossier d'export Ayigba.
 
-NON TESTE : ecrit sans Unreal sous la main, le 17/11/2026.
+NON TESTE DANS UNREAL : ecrit sans Unreal sous la main (17/11/2026, complete le 18/11/2026).
 
 A lancer dans l'editeur Unreal (greffon « Python Editor Script Plugin » active),
 par exemple dans la console Python :
@@ -66,3 +66,45 @@ def importer(dossier_export, destination="/Game/Ayigba"):
     unreal.log("[Ayigba] Import termine : " + str(len(chemins)) + " assets, " + str(len(couches)) + " couches, "
                + str(nb_collision) + " maillages avec collision complexe. Conserver CREDITS.md avec la carte.")
     return chemins
+
+
+def importer_zones(dossier_export, destination="/Game/Ayigba/zones"):
+    """Importe chaque zones/*.glb (decoupage de 250 m, voir zones.json) et renvoie {nom_de_zone: [assets]}.
+
+    NON TESTE DANS UNREAL. Meme contrat de donnees que adapters/godot/ayigba_carte.gd :
+    zones.json (emprise [ouest, sud, est, nord] en metres, repere local, y vers le nord ; couches avec
+    collision et visible = toujours | pres | loin ; distance_detail_m). Ce script ne fait QUE l'import des
+    fichiers : le chargement a la demande selon la distance (Level Streaming, World Partition ou acteur
+    maison) et les niveaux de detail restent a faire dans le projet. Le glTF est en X = est, Y = haut,
+    Z = sud (metres) ; Unreal est en centimetres, Z haut. La conversion exacte faite par l'import n'a pas
+    ete verifiee : controler a l'ecran avant de placer quoi que ce soit.
+    """
+    chemin_zones = os.path.join(dossier_export, "zones.json")
+    if not os.path.isfile(chemin_zones):
+        unreal.log_error("[Ayigba] zones.json introuvable dans : " + dossier_export)
+        return {}
+    with open(chemin_zones, encoding="utf-8") as f:
+        index = json.load(f)
+    taches, noms = [], []
+    for z in index.get("zones", []):
+        glb = os.path.join(dossier_export, z["fichier"])
+        if not os.path.isfile(glb):
+            unreal.log_warning("[Ayigba] zone absente : " + glb)
+            continue
+        t = unreal.AssetImportTask()
+        t.set_editor_property("filename", glb)
+        t.set_editor_property("destination_path", destination + "/" + z["nom"])
+        t.set_editor_property("automated", True)
+        t.set_editor_property("replace_existing", True)
+        t.set_editor_property("save", True)
+        taches.append(t)
+        noms.append(z["nom"])
+    if not taches:
+        return {}
+    unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks(taches)
+    resultat = {n: list(t.get_editor_property("imported_object_paths")) for n, t in zip(noms, taches)}
+    vides = [n for n, a in resultat.items() if not a]
+    if vides:
+        unreal.log_warning("[Ayigba] zones sans asset importe : " + ", ".join(vides[:10]))
+    unreal.log("[Ayigba] " + str(len(taches) - len(vides)) + " zones importees sur " + str(len(taches)) + ". Conserver CREDITS.md avec la carte.")
+    return resultat

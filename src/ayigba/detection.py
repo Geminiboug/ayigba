@@ -72,3 +72,36 @@ def detecter(bat: dict, vers_local, zone, deja: list, interdit=None) -> list:
             gardes.append(g)
     gardes.sort(key=lambda g: (round(g.centroid.x, 2), round(g.centroid.y, 2)))
     return gardes
+
+
+FRAGMENT_SURFACE_M2 = 20.0   # une détection plus petite est examinée
+FRAGMENT_HAUTEUR_M = 2.4     # ... et retirée si plus basse que cela
+FRAGMENT_VOISIN_M = 3.0      # ... ou si elle touche (à cette distance ou moins) un bâtiment plus grand
+
+
+def filtrer_fragments(candidats: list, voisins: list, surface_m2: float = FRAGMENT_SURFACE_M2,
+                      hauteur_m: float = FRAGMENT_HAUTEUR_M, voisin_m: float = FRAGMENT_VOISIN_M) -> tuple[list, list]:
+    """Sépare les détections en (gardées, retirées) ; fonction pure, sans lecture de fichier.
+
+    candidats : liste de (polygone, hauteur médiane en m ou None) ; voisins : polygones des bâtiments connus (OSM).
+    Une détection est retirée si sa surface est < surface_m2 ET (sa hauteur est connue et < hauteur_m, OU elle est à
+    voisin_m ou moins d'un bâtiment plus grand qu'elle, connu ou détecté). Une hauteur inconnue ne déclenche pas
+    le critère de hauteur (prudence). Une détection de surface >= surface_m2 n'est jamais touchée.
+    Renvoie deux listes d'indices de `candidats`, dans l'ordre d'origine."""
+    from shapely import STRtree
+    autres = [g for g, _ in candidats] + list(voisins)
+    arbre = STRtree(autres) if autres else None
+    gardes, retires = [], []
+    for k, (g, h) in enumerate(candidats):
+        if g.area >= surface_m2:
+            gardes.append(k)
+            continue
+        bas = h is not None and h < hauteur_m
+        colle = False
+        if not bas and arbre is not None:
+            for i in arbre.query(g.buffer(voisin_m)).tolist():
+                if i != k and autres[i].area > g.area and g.distance(autres[i]) <= voisin_m:
+                    colle = True
+                    break
+        (retires if bas or colle else gardes).append(k)
+    return gardes, retires

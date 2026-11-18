@@ -23,7 +23,7 @@ from ..mesh import MeshBuilder, rng_for
 from ..props import CATALOGUE, place
 from ..terrain import BED_DEPTH, build_ground, shore_walls
 from .clean import _polygons
-from .. import batiments25d
+from .. import batiments25d, carrefours
 from .relief import altitudes, batiments, vers_donnees
 
 STAGE = "generation"
@@ -32,6 +32,7 @@ SIDEWALK_CLASSES = {"trunk", "primary", "secondary", "tertiary", "unclassified",
 SIDEWALK = (0.63, 0.62, 0.59)
 SAND = (0.78, 0.69, 0.52)
 LATERITE = (0.72, 0.52, 0.36)
+PAINT = (0.92, 0.92, 0.89)
 ASPHALT = (0.23, 0.23, 0.25)
 TARMAC = (0.33, 0.33, 0.35)
 WATER = (0.16, 0.38, 0.47)
@@ -75,10 +76,21 @@ def run(ctx) -> dict:
     remaining = zone if water_part is None else zone.difference(water_part)
     # une chaussée ne passe jamais sous un bâtiment (les abris ouverts, « roof », sont exclus)
     solid = unary_union([g for g, p in buildings if p.get("type") != "roof"]) if buildings else None
-    paved_part = unary_union(corridors(True) + surfaces).intersection(remaining)
+    paved_raw = unary_union(corridors(True) + surfaces)
+    # carrefours : coins arrondis près des croisements (congés), puis passages piétons peints sur les grandes rues
+    junctions = carrefours.noeuds(roads) if bool(ctx.config.option("carrefours", "actif", True)) else []
+    fillet = carrefours.arrondir(unary_union(corridors(True)), junctions, float(ctx.config.option("carrefours", "arrondi_m", 4.0))) if junctions else None
+    if fillet is not None:
+        paved_raw = paved_raw.union(fillet)
+    paved_part = paved_raw.intersection(remaining)
     if solid is not None:
         paved_part = paved_part.difference(solid)
-    remaining = remaining.difference(paved_part)
+    paint_part = None
+    if junctions and bool(ctx.config.option("carrefours", "passages", True)):
+        paint_part = carrefours.passages(junctions, roads, paved_part)
+        if paint_part is not None:
+            paved_part = paved_part.difference(paint_part)
+    remaining = remaining.difference(paved_part if paint_part is None else paved_part.union(paint_part))  # la peinture reste de la chaussée
     unpaved_part = unary_union(corridors(False)).intersection(remaining)
     if solid is not None:
         unpaved_part = unpaved_part.difference(solid)
@@ -100,9 +112,9 @@ def run(ctx) -> dict:
             else:
                 land_part = land_part.difference(walk_part)
 
-    parts = {"eau": water_part, "revetu": paved_part, "non_revetu": unpaved_part, "trottoir": walk_part, "terre": land_part}
+    parts = {"eau": water_part, "revetu": paved_part, "marquage": paint_part, "non_revetu": unpaved_part, "trottoir": walk_part, "terre": land_part}
     ground_features = []
-    for kind in ("eau", "non_revetu", "revetu", "trottoir", "terre"):
+    for kind in ("eau", "non_revetu", "revetu", "marquage", "trottoir", "terre"):
         for k, p in enumerate(_polygons(parts[kind]) if parts[kind] is not None else []):
             if p.area > 0:
                 ground_features.append((p, {"id": f"{kind}/{k}", "genre": kind}))
@@ -129,8 +141,13 @@ def run(ctx) -> dict:
 
     chaussee = MeshBuilder("chaussees")
     chaussee._add(ground.triangles_of(["revetu"]), ASPHALT)
+    chaussee._add(ground.triangles_of(["marquage"]), PAINT)
     chaussee._add(ground.triangles_of(["non_revetu"]), LATERITE)
-    finish(chaussee, True, "chaussées revêtues et non revêtues, pistes d'aéroport")
+    finish(chaussee, True, "chaussées revêtues et non revêtues, pistes d'aéroport, passages piétons peints")
+    if junctions:
+        n_bars = len(getattr(paint_part, "geoms", [paint_part])) if paint_part is not None else 0
+        ctx.journal.record("genere", "carrefours", f"{len(junctions)} carrefour(s) détecté(s) ; coins arrondis ; {n_bars} bande(s) de passage piéton peintes à l'entrée des grandes rues "
+                           "(règle générale de style : la présence réelle des passages n'est pas dans les données)")
 
     # Trottoirs à plat par rapport à la chaussée (pas de bordure). Un essai de bordure surélevée en pente a été retiré le
     # 17/11/2026 : des faces presque verticales bloquaient les bots piétons. Une bordure ne reviendra que si chaque face

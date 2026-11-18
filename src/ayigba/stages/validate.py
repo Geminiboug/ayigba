@@ -103,7 +103,7 @@ def run(ctx) -> dict:
     # 3. conflits
     buildings = read_features(gen / "buildings.geojson")
     solid = [(g, p) for g, p in buildings if p.get("type") != "roof"]
-    road_surface = [g for g, p in ground if p["genre"] in ("revetu", "non_revetu")]
+    road_surface = [g for g, p in ground if p["genre"] in ("revetu", "marquage", "non_revetu")]
     if solid and road_surface:
         tree = STRtree(road_surface)
         for g, p in solid:

@@ -1,4 +1,4 @@
-// NON TESTE : ecrit sans Unity sous la main, le 17/11/2026.
+// NON TESTE DANS UNITY : ecrit sans Unity sous la main (17/11/2026, complete le 18/11/2026).
 //
 // Adaptateur Unity pour un dossier d'export Ayigba. Il ne fait que convertir :
 // aucune logique de jeu.
@@ -56,6 +56,46 @@ namespace Ayigba
             string dossier = EditorUtility.OpenFolderPanel("Dossier d'export Ayigba", "", "");
             if (string.IsNullOrEmpty(dossier)) return;
             Importer(dossier);
+        }
+
+        // Copie zones.json et zones/ dans StreamingAssets/ayigba/<projet> et cree un objet AyigbaCarte (chargement a la demande).
+        // NON TESTE DANS UNITY. Necessite glTFast et le script Runtime/AyigbaCarte.cs dans le projet.
+        [MenuItem("Tools/Ayigba/Importer les zones (chargement a la demande)...")]
+        public static void ImporterZones()
+        {
+            string dossier = EditorUtility.OpenFolderPanel("Dossier d'export Ayigba (avec zones.json)", "", "");
+            if (string.IsNullOrEmpty(dossier)) return;
+            if (!File.Exists(Path.Combine(dossier, "zones.json")) || !Directory.Exists(Path.Combine(dossier, "zones")))
+            {
+                Debug.LogError("[Ayigba] zones.json ou zones/ introuvable dans : " + dossier);
+                return;
+            }
+            // nom du projet : lu dans le manifeste s'il existe
+            string projet = "carte";
+            string cheminManifeste = Path.Combine(dossier, "manifeste.json");
+            if (File.Exists(cheminManifeste))
+            {
+                AyigbaManifeste m = JsonUtility.FromJson<AyigbaManifeste>(File.ReadAllText(cheminManifeste));
+                if (m != null && !string.IsNullOrEmpty(m.projet)) projet = m.projet;
+            }
+            foreach (char c in Path.GetInvalidFileNameChars()) projet = projet.Replace(c, '_');
+            string cible = Path.Combine(Application.streamingAssetsPath, "ayigba", projet);
+            Directory.CreateDirectory(Path.Combine(cible, "zones"));
+            File.Copy(Path.Combine(dossier, "zones.json"), Path.Combine(cible, "zones.json"), true);
+            foreach (string f in Directory.GetFiles(Path.Combine(dossier, "zones"), "*.glb"))
+                File.Copy(f, Path.Combine(cible, "zones", Path.GetFileName(f)), true);
+            if (File.Exists(Path.Combine(dossier, "CREDITS.md")))
+                File.Copy(Path.Combine(dossier, "CREDITS.md"), Path.Combine(cible, "CREDITS.md"), true);
+            else
+                Debug.LogWarning("[Ayigba] CREDITS.md absent : les credits restent obligatoires.");
+            AssetDatabase.Refresh();
+
+            var go = new GameObject("AyigbaCarte_" + projet);
+            var carte = go.AddComponent<AyigbaCarte>();
+            carte.dossier = "ayigba/" + projet;
+            Undo.RegisterCreatedObjectUndo(go, "Importer les zones Ayigba");
+            Selection.activeGameObject = go;
+            Debug.Log("[Ayigba] Zones copiees dans " + cible + ". Reglez la cible (joueur ou camera) sur l'objet " + go.name + ".");
         }
 
         public static void Importer(string dossier)
