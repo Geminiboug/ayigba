@@ -16,12 +16,13 @@ const LARGEUR := 1.8
 const LONGUEUR := 4.0
 
 var routes: Array = []
-var tolerance := 2.0
+var tolerance := 4.5   # distance d arrivée à un point : grande, pour amorcer les virages avant le coin (le rayon de braquage est de plusieurs mètres)
 var echecs: Array = []
 var fini := false
 var distance := 0.0
 var routes_faites := 0
 var renverses := 0
+var demi_tours := 0           # routes coupées à une épingle : le point suivant est presque derrière le véhicule (> 126 degrés)
 
 var _r := 0
 var _p := 1
@@ -111,6 +112,10 @@ func _physics_process(delta: float) -> void:
 	avant.y = 0.0
 	avant = avant.normalized()
 	var angle := avant.signed_angle_to(vers.normalized(), Vector3.UP)   # positif : le point est à gauche
+	if _p >= 2 and absf(angle) > 2.2 and _depuis < 0.5:   # un véhicule ne fait pas demi-tour sur place : épingle comptée à part, route coupée
+		demi_tours += 1
+		_suivante()
+		return
 	steering = clampf(angle, -BRAQUAGE_MAX, BRAQUAGE_MAX)
 	var v := linear_velocity.dot(avant)
 	var cible := vitesse * (0.4 if absf(angle) > 0.6 else 1.0)

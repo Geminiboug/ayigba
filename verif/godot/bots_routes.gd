@@ -238,7 +238,10 @@ func _conclure(hors_delai: bool) -> void:
 	var echecs: Array = []
 	var distance := 0.0
 	var faites := 0
+	var demi_tours := 0
 	for bot in _bots:
+		if bot.get("demi_tours") != null:
+			demi_tours += int(bot.get("demi_tours"))
 		echecs.append_array(bot.get("echecs"))
 		distance += bot.get("distance")
 		faites += bot.get("routes_faites")
@@ -251,13 +254,15 @@ func _conclure(hors_delai: bool) -> void:
 			bloques += 1
 	print("%s routes parcourues sans défaut : %d sur %d (%.1f km à pied)" % ["OK   " if echecs.is_empty() else "ECHEC", faites, _total_routes, distance / 1000.0])
 	print("%s blocages (murs invisibles ou obstacles) : %d" % ["OK   " if bloques == 0 else "ECHEC", bloques])
+	if demi_tours > 0:
+		print("      %d route(s) coupée(s) à une épingle (demi-tour impossible pour un véhicule, non compté comme défaut)" % demi_tours)
 	print("%s chutes (trous) : %d" % ["OK   " if chutes == 0 else "ECHEC", chutes])
 	for e in echecs.slice(0, 15):
 		print("      %s sur %s en (%.1f, %.1f, %.1f)" % [e["genre"], e["route"], e["x"], e["y"], e["z"]])
 	if _rapport != "":
 		var f := FileAccess.open(_rapport, FileAccess.WRITE)
 		if f:
-			f.store_string(JSON.stringify({"routes": _total_routes, "routes_sans_defaut": faites, "km": snappedf(distance / 1000.0, 0.01), "blocages": bloques, "chutes": chutes, "defauts": echecs}, " "))
+			f.store_string(JSON.stringify({"routes": _total_routes, "routes_sans_defaut": faites, "km": snappedf(distance / 1000.0, 0.01), "blocages": bloques, "chutes": chutes, "demi_tours": demi_tours, "defauts": echecs}, " "))
 	var ok := echecs.is_empty() and not hors_delai
 	print("RESULTAT bots_routes : %s" % ("OK" if ok else "%d DEFAUT(S)" % echecs.size()))
 	quit(0 if ok else 1)

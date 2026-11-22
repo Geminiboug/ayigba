@@ -32,7 +32,7 @@ Nouveautés du 22/11/2026 (toutes facultatives et désactivées par défaut, les
 - **Textures** : `[textures] actif = true` ajoute un grain de matière aux murs, chaussées, trottoirs et sol.
 - **Classes de bâtiments** : `[style] classes = true` colore commerces, institutions, lieux de culte et industrie d'après leur type OSM ou le point d'intérêt qu'ils contiennent.
 - **Bots hors des routes** : `bots_routes.gd mode=hors_routes` (navmesh) dans Godot.
-- **Véhicule à roues** : `bots_routes.gd gabarit=roues` fait rouler un vrai véhicule (suspension, direction) ; à Cadjèhoun : 597 routes sur 610 sans défaut ; 13 blocages restent à expliquer (`analyse_defauts.gd`, `route=<id> trace=1`).
+- **Véhicule à roues** : `bots_routes.gd gabarit=roues` fait rouler un vrai véhicule (suspension, direction) ; à Cadjèhoun : 606 routes sur 610 sans défaut, 2 épingles comptées à part, 2 défauts à examiner (une chute au bord de la carte, un passage étroit) ; outils `analyse_defauts.gd` et `route=<id> trace=1`.
 - **Villes testées** : Cadjèhoun, Ouidah, Porto-Novo, Parakou.
 
 - **Styles régionaux et cohérence entre voisins** : préréglages (Afrique de l'Ouest, Europe tempérée, Andes, générique) choisis d'après le pays, et quartiers de couleurs cohérentes au lieu d'un tirage indépendant par bâtiment (`[style]` dans config.toml, `ayigba styles`). Ce sont des choix de style, pas des mesures.
@@ -63,7 +63,7 @@ Ce qui n'est pas fait ou pas vérifié :
 
 - relief plus fin que 30 m, arbres non retirés du relief, toits autres qu'à deux pentes (les petits bâtiments rectangulaires ont un toit à deux pentes par choix de style, réglable dans `[toits]`), façades, bordures de trottoir, carrefours dessinés, ponts (rendus comme des remblais) ;
 - bâtiments détectés par IA non contrôlés sur le terrain (faux positifs ou fusions possibles) : l'outil sait les trier par indices de suspicion, mais leur exactitude réelle n'est pas mesurée ;
-- cause exacte des défauts du véhicule à roues non établie (conduite du bot probable) ; images par seconde réelles non mesurées ;
+- 2 défauts du véhicule à roues à Cadjèhoun non examinés plus loin ; images par seconde réelles non mesurées ;
 - adaptateurs Unity et Unreal : écrits mais jamais lancés dans leur moteur, faute de moteur disponible. Ce qui est vérifié sans moteur : les glTF passent le validateur officiel Khronos (0 erreur, 0 avertissement) et un test automatique contrôle indices 32 bits, valeurs finies, accesseurs, noms et manifeste (`tests/test_export_conformite.py`, `tools/valider_gltf.js`) ;
 - interface Tauri (seule la visionneuse HTML existe), IA de style autre que des règles, édition manuelle ;
 - aucune comparaison avec le terrain réel ;
