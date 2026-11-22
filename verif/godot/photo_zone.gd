@@ -39,8 +39,10 @@ func _lancer() -> void:
 	root.add_child(cam)
 	var x := float(_arg("x", "0"))
 	var z := float(_arg("z", "0"))
-	cam.global_position = Vector3(x + 60, 38, z + 60)
-	cam.look_at(Vector3(x, 0, z))
+	var dist := float(_arg("dist", "60"))
+	var haut := float(_arg("haut", "38"))
+	cam.global_position = Vector3(x + dist, haut, z + dist)
+	cam.look_at(Vector3(x, float(_arg("y", "0")), z))
 	cam.fov = 55
 	cam.current = true
 	for i in 12:
