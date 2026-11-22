@@ -1,6 +1,6 @@
 extends SceneTree
 ## Bots dans le moteur : des personnages parcourent les routes de la carte avec la physique de Godot.
-##   Godot --headless --path verif/godot --script res://bots_routes.gd -- export=<dossier out/neutre> [routes=200] [bots=24] [gabarit=pieton|vehicule] [mode=traversees|hors_routes] [trajets=200] [rayon=300] [rapport=<fichier.json>]
+##   Godot --headless --path verif/godot --script res://bots_routes.gd -- export=<dossier out/neutre> [routes=200] [bots=24] [gabarit=pieton|vehicule|roues] [mode=traversees|hors_routes] [trajets=200] [rayon=300] [rapport=<fichier.json>]
 ## La carte est chargée zone par zone avec l'adaptateur (res://ayigba_carte.gd), toutes zones chargées, collisions créées.
 ## Un bot « bloque » révèle un mur invisible ou un obstacle sur une route ; une « chute » révèle un trou.
 ## routes=0 : toutes les routes. Code de sortie 0 si aucun défaut, 1 sinon.
@@ -47,7 +47,8 @@ func _lancer() -> void:
 	var voulu := int(_arg("routes", "200"))
 	var pas := 1 if voulu <= 0 else maxi(1, int(ceil(float(toutes.size()) / voulu)))
 	var choisies: Array = []
-	var vehicule := _arg("gabarit", "pieton") == "vehicule"
+	var roues := _arg("gabarit", "pieton") == "roues"   # vrai véhicule à roues (bot_roues.gd)
+	var vehicule := roues or _arg("gabarit", "pieton") == "vehicule"
 	if vehicule:   # un véhicule ne prend que les routes carrossables
 		toutes = toutes.filter(func(r): return not r["pieton"])
 	for k in range(0, toutes.size(), pas):
@@ -100,6 +101,19 @@ func _lancer() -> void:
 	Engine.max_physics_steps_per_frame = 64
 	var script_bot: Script = load("res://bot.gd")
 	for b in nb:
+		if roues:
+			var vh := VehicleBody3D.new()
+			vh.set_script(load("res://bot_roues.gd"))
+			vh.call("monter")
+			vh.collision_mask = 1
+			vh.collision_layer = 2
+			var lot_r: Array = []
+			for k in range(b, choisies.size(), nb):
+				lot_r.append(choisies[k])
+			vh.set("routes", lot_r)
+			root.add_child(vh)
+			_bots.append(vh)
+			continue
 		var bot := CharacterBody3D.new()
 		bot.set_script(script_bot)
 		var forme := CollisionShape3D.new()
