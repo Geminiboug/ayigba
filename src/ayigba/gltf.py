@@ -14,6 +14,8 @@ from pathlib import Path
 
 import numpy as np
 
+from . import textures as tx
+
 FORBIDDEN_SUFFIXES = ("_col", "-col", "_colonly", "-colonly", "_convcol", "-convcol")  # suffixes d'import interprétés par Godot
 
 
@@ -49,12 +51,17 @@ def _to_linear(rgb) -> list[float]:
     return out
 
 
-def write_glb(path: Path, layers: list[tuple[str, np.ndarray, np.ndarray]], extras: dict | None = None) -> dict:
+def write_glb(path: Path, layers: list[tuple[str, np.ndarray, np.ndarray]], extras: dict | None = None,
+              textures: bool = False, graine: int = 1) -> dict:
     """layers : liste (nom, triangles (T,3,3) en repère local, couleurs sRGB (T,3) entre 0 et 1).
+    textures : ajoute des coordonnées de texture (projection plane) et un grain procédural par couche (voir textures.py) ;
+    False (défaut) = fichier identique à celui des versions sans textures.
     Renvoie le nombre de triangles écrits par couche."""
     buffer = bytearray()
     views, accessors, meshes, nodes, materials = [], [], [], [], []
     material_of: dict[tuple, int] = {}
+    image_of: dict[str, int] = {}   # type de texture -> index de texture glTF
+    images, gltf_textures = [], []
     stats = {}
 
     def add_view(data: np.ndarray, target: int = 34962) -> int:
@@ -78,26 +85,46 @@ def write_glb(path: Path, layers: list[tuple[str, np.ndarray, np.ndarray]], extr
         t, normals, col = t[ok], normals[ok] / length[ok], limit_palette(np.asarray(colors, dtype=np.float64)[ok])
         if len(t) == 0:
             continue
+        kind = tx.type_pour_couche(name) if textures else None
         palette, which = np.unique(col, axis=0, return_inverse=True)
         which = np.asarray(which).reshape(-1)
         primitives = []
         for k, rgb in enumerate(palette):
             sel = which == k
-            key = tuple(float(v) for v in rgb)
+            key = tuple(float(v) for v in rgb) + ((kind,) if kind else ())
             if key not in material_of:
                 material_of[key] = len(materials)
-                materials.append({"name": f"couleur_{len(materials):02d}", "pbrMetallicRoughness": {
-                    "baseColorFactor": _to_linear(key) + [1.0], "metallicFactor": 0.0, "roughnessFactor": 0.9}})
+                pbr = {"baseColorFactor": _to_linear(key[:3]) + [1.0], "metallicFactor": 0.0, "roughnessFactor": 0.9}
+                if kind:
+                    if kind not in image_of:
+                        raw = tx.png_octets(kind, graine=graine)
+                        offset = len(buffer)
+                        buffer.extend(_pad(raw, b"\x00"))
+                        views.append({"buffer": 0, "byteOffset": offset, "byteLength": len(raw)})
+                        images.append({"bufferView": len(views) - 1, "mimeType": "image/png", "name": "grain_" + kind})
+                        gltf_textures.append({"sampler": 0, "source": len(images) - 1})
+                        image_of[kind] = len(gltf_textures) - 1
+                    pbr["baseColorTexture"] = {"index": image_of[kind]}
+                materials.append({"name": f"couleur_{len(materials):02d}" + ("_" + kind if kind else ""), "pbrMetallicRoughness": pbr})
             # sommets partagés : lignes [position, normale] glTF dédupliquées (normales arrondies à 4 décimales)
             pos_all = to_gltf(t[sel].reshape(-1, 3))
             nor_all = np.round(to_gltf(np.repeat(normals[sel], 3, axis=0)).astype(np.float64), 4).astype(np.float32)
-            rows = np.concatenate([pos_all, nor_all], axis=1)
+            if kind:
+                loc = t[sel].reshape(-1, 3)
+                uv_all = np.round(tx.uv_planaires(loc, np.repeat(normals[sel], 3, axis=0), tx.tuile_m(kind)), 4).astype(np.float32)
+                rows = np.concatenate([pos_all, nor_all, uv_all], axis=1)
+            else:
+                rows = np.concatenate([pos_all, nor_all], axis=1)
             uniq, inverse = np.unique(rows, axis=0, return_inverse=True)
             inverse = np.asarray(inverse).reshape(-1)
             pos = np.ascontiguousarray(uniq[:, :3])
-            nor = np.ascontiguousarray(uniq[:, 3:])
+            nor = np.ascontiguousarray(uniq[:, 3:6])
+            uvs = np.ascontiguousarray(uniq[:, 6:8]) if kind else None
             idx = inverse.astype("<u4")  # l'ordre des coins de chaque triangle est conservé
             attributes = {}
+            if uvs is not None:
+                accessors.append({"bufferView": add_view(uvs), "componentType": 5126, "count": len(uvs), "type": "VEC2"})
+                attributes["TEXCOORD_0"] = len(accessors) - 1
             for attr, data in (("POSITION", pos), ("NORMAL", nor)):
                 acc = {"bufferView": add_view(data), "componentType": 5126, "count": len(pos), "type": "VEC3"}
                 if attr == "POSITION":
@@ -122,6 +149,10 @@ def write_glb(path: Path, layers: list[tuple[str, np.ndarray, np.ndarray]], extr
         "bufferViews": views,
         "buffers": [{"byteLength": len(buffer)}],
     }
+    if images:
+        doc["images"] = images
+        doc["textures"] = gltf_textures
+        doc["samplers"] = [{"magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 10497}]
     if extras:
         doc["scenes"][0]["extras"] = extras
     js = _pad(json.dumps(doc, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"), b" ")

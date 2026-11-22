@@ -56,7 +56,9 @@ def run(ctx) -> dict:
     for layer in scene["couches"]:
         tris, colors = load_mesh(gen / f"{layer['nom']}.npz")
         layers.append((layer["nom"], tris, colors))
-    stats = write_glb(out / "carte.glb", layers, extras={"generateur": f"ayigba {__version__}", "unite": "metre", "graine": ctx.config.seed})
+    textures = bool(ctx.config.option("textures", "actif", False))   # [textures] actif = true : grain procédural + coordonnées de texture (désactivé par défaut)
+    stats = write_glb(out / "carte.glb", layers, extras={"generateur": f"ayigba {__version__}", "unite": "metre", "graine": ctx.config.seed, "textures": textures},
+                      textures=textures, graine=ctx.config.seed)
 
     def to_wgs84(features):
         def convert(coords: np.ndarray) -> np.ndarray:
@@ -95,7 +97,7 @@ def run(ctx) -> dict:
         for z in zones_doc["zones"]:
             with np.load(opt / "zones" / f"{z['nom']}.npz") as data:
                 zl = [(c["nom"], data[f"{c['nom']}__triangles"].astype(np.float64), data[f"{c['nom']}__couleurs"]) for c in z["couches"]]
-            write_glb(zdir / f"{z['nom']}.glb", zl, extras={"zone": z["nom"], "emprise_locale": z["emprise"]})
+            write_glb(zdir / f"{z['nom']}.glb", zl, extras={"zone": z["nom"], "emprise_locale": z["emprise"]}, textures=textures, graine=ctx.config.seed)
             z["fichier"] = f"zones/{z['nom']}.glb"
         (out / "zones.json").write_text(json.dumps(zones_doc, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
 
