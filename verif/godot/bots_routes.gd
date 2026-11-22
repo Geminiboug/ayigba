@@ -141,7 +141,12 @@ func _trajets_navmesh(boite: AABB, vehicule: bool, voulu: int, rayon: float) -> 
 	nm.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
 	nm.geometry_collision_mask = 1
 	var centre := boite.get_center()
-	nm.filter_baking_aabb = AABB(Vector3(centre.x - rayon, boite.position.y - 5.0, centre.z - rayon), Vector3(rayon * 2.0, boite.size.y + 50.0, rayon * 2.0))
+	# altitude du sol au centre : la boite de la carte n'est pas fiable en hauteur (Parakou est a plus de 300 m d'altitude)
+	await physics_frame
+	var sol := root.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(centre.x, 5000.0, centre.z), Vector3(centre.x, -500.0, centre.z)))
+	var y_sol: float = sol["position"].y if not sol.is_empty() else centre.y
+	print("      altitude du sol au centre : %.1f m" % y_sol)
+	nm.filter_baking_aabb = AABB(Vector3(centre.x - rayon, y_sol - 120.0, centre.z - rayon), Vector3(rayon * 2.0, 300.0, rayon * 2.0))
 	var source := NavigationMeshSourceGeometryData3D.new()
 	var t0 := Time.get_ticks_msec()
 	NavigationServer3D.parse_source_geometry_data(nm, source, root)
