@@ -41,6 +41,21 @@ def _estimate_height(rng, area: float, kind: str, style: Style = AFRIQUE_DE_L_OU
     return round(levels * 3.0 + rng.uniform(0.3, 0.9), 2)
 
 
+def _genres_par_batiment(buildings, pois) -> dict:
+    """Pour les bâtiments dont le type OSM est le générique `yes`, le type du premier point d'intérêt (commerce, service,
+    lieu de culte, hébergement) situé dans l'emprise : c'est ce qui donne une classe de style aux bâtiments sans tag précis."""
+    utiles = [(pt, pr.get("type")) for pt, pr in pois if pr.get("genre") in ("amenity", "shop", "tourism") and pr.get("type")]
+    res: dict = {}
+    for geom, props in buildings:
+        if props.get("type") not in (None, "yes"):
+            continue
+        for pt, genre in utiles:
+            if geom.contains(pt):
+                res[props["id"]] = genre
+                break
+    return res
+
+
 def run(ctx) -> dict:
     src = ctx.project.work / "nettoyage"
     out = ctx.project.stage_dir(STAGE)
@@ -165,6 +180,7 @@ def run(ctx) -> dict:
     bati = MeshBuilder("batiments")
     estimated = 0
     final_buildings = []
+    genres_poi = _genres_par_batiment(buildings, read_features(src / "pois.geojson")) if style.classes else {}
     for geom, props in buildings:
         rng = rng_for(seed, props["id"])
         height = props.get("hauteur")
@@ -179,7 +195,7 @@ def run(ctx) -> dict:
             height = _estimate_height(rng, geom.area, props.get("type", "yes"), style)
             source_h = "genere"
             estimated += 1
-        wall, roof = teinte.choisir(geom.centroid.x, geom.centroid.y, rng, props.get("type"))
+        wall, roof = teinte.choisir(geom.centroid.x, geom.centroid.y, rng, genres_poi.get(props["id"]) or props.get("type"))
         hex_mur, hex_toit = "#%02x%02x%02x" % tuple(round(v * 255) for v in wall), "#%02x%02x%02x" % tuple(round(v * 255) for v in roof)
         if props.get("type") != "roof":
             couleurs_murs.append(wall)

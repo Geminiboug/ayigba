@@ -289,3 +289,11 @@ def test_classes_actives_restreignent_les_couleurs_et_restent_reproductibles():
     # désactivées : même résultat qu'avant, quel que soit le genre
     t0 = Teinte(AFRIQUE_DE_L_OUEST, 7)
     assert t0.choisir(1.0, 1.0, random.Random(3), "school") == t0.choisir(1.0, 1.0, random.Random(3), "yes")
+
+
+def test_genre_par_poi_pour_les_batiments_yes():
+    from shapely.geometry import Point, box
+    from ayigba.stages.generate import _genres_par_batiment
+    bats = [(box(0, 0, 10, 10), {"id": "a", "type": "yes"}), (box(20, 0, 30, 10), {"id": "b", "type": "house"}), (box(40, 0, 50, 10), {"id": "c", "type": "yes"})]
+    pois = [(Point(5, 5), {"genre": "shop", "type": "supermarket"}), (Point(25, 5), {"genre": "amenity", "type": "school"}), (Point(45, 5), {"genre": "arbre", "type": "tree"})]
+    assert _genres_par_batiment(bats, pois) == {"a": "supermarket"}

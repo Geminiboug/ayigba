@@ -165,10 +165,10 @@ def charger(config) -> Style:
 # ------------------------------------------------------------------------------------------------ classes de bâtiments
 
 _CLASSES = {
-    "commerce": "commercial retail supermarket kiosk shop",
+    "commerce": "commercial retail supermarket kiosk shop restaurant bar cafe bank marketplace fuel pharmacy fast_food",
     "industriel": "industrial warehouse factory manufacture storage_tank hangar service garage garages",
-    "religieux": "church mosque temple cathedral chapel synagogue shrine religious",
-    "institution": "school hospital university college kindergarten public civic government office clinic fire_station train_station hotel",
+    "religieux": "church mosque temple cathedral chapel synagogue shrine religious place_of_worship basilica",
+    "institution": "school hospital university college kindergarten public civic government office clinic fire_station train_station hotel post_office townhall police guest_house doctors dentist library courthouse",
 }
 
 
