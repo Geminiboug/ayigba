@@ -80,7 +80,7 @@ def main(argv: list[str] | None = None) -> int:
             if res["photos_utilisees"] == 0:
                 raise LookupError(f"Aucune photo exploitable dans {args.dossier}")
             print(f"{res['photos_utilisees']} photo(s) exploitée(s) sur {res['photos']}.")
-            for nom in ("murs", "toits"):
+            for nom in ("murs", "toits", "sol"):
                 print(f"{nom} : " + "  ".join(f"{pp.hex_couleur(c)} ({w:.2f})" for c, w in res[nom]))
             if args.sortie:
                 pp.ecrire_suggestion(res, args.lieu, args.sortie)

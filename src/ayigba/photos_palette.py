@@ -54,18 +54,26 @@ def _luminance(rgb: np.ndarray) -> np.ndarray:
     return 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
 
 
-def pixels_utiles(chemin: Path, taille: int = 256) -> np.ndarray:
-    """Pixels RGB (0..1) d'une photo, sans ciel, végétation, ombres profondes ni zones brûlées. Tableau (n, 3)."""
+def pixels_utiles(chemin: Path, taille: int = 256, zone: str = "facade") -> np.ndarray:
+    """Pixels RGB (0..1) d'une photo, sans ciel, végétation, ombres profondes ni zones brûlées. Tableau (n, 3).
+
+    zone = "facade" : bandes de 20 % à 65 % de la hauteur (le sol du bas de la photo est écarté : il dominait la palette) ;
+    zone = "sol" : bas de la photo (70 % à 100 %), pour proposer la couleur du sol. Une photo de nuit (luminance moyenne < 0,30)
+    est ignorée : les enseignes lumineuses faussent tout."""
     im = Image.open(chemin).convert("RGB")
     im.thumbnail((taille, taille))
     a = np.asarray(im, dtype=np.float64) / 255.0
+    if _luminance(a).mean() < 0.30:
+        return np.zeros((0, 3))
+    h0 = a.shape[0]
+    a = a[int(h0 * 0.70):] if zone == "sol" else a[int(h0 * 0.20): int(h0 * 0.65)]
     h = a.shape[0]
     r, g, b = a[..., 0], a[..., 1], a[..., 2]
     mx, mn = a.max(axis=2), a.min(axis=2)
     sat = np.where(mx > 0, (mx - mn) / np.maximum(mx, 1e-9), 0.0)
     lum = _luminance(a)
     haut = np.zeros(a.shape[:2], bool)
-    haut[: max(1, h // 3)] = True
+    haut[: max(1, h // 3)] = True if zone != "sol" else False
     ciel = haut & (((b >= r) & (b >= g * 0.95) & (lum > 0.45)) | ((sat < 0.12) & (lum > 0.80)))   # bleu clair ou blanc haut
     vert = (g > r * 1.05) & (g > b * 1.08) & (sat > 0.18)
     sombre = lum < 0.10
@@ -94,8 +102,8 @@ def kmoyennes(lab: np.ndarray, k: int, graine: int = 1, iterations: int = 25) ->
     return centres, parts
 
 
-def couleurs_photo(chemin: Path, k: int = 6) -> list[tuple[tuple[float, float, float], float]]:
-    px = pixels_utiles(chemin)
+def couleurs_photo(chemin: Path, k: int = 6, zone: str = "facade") -> list[tuple[tuple[float, float, float], float]]:
+    px = pixels_utiles(chemin, zone=zone)
     if len(px) < 200:
         return []
     if len(px) > 20000:
@@ -134,20 +142,23 @@ def palette_du_lieu(dossier: Path, n_murs: int = 7, n_toits: int = 5) -> dict:
     """Palette suggérée pour les photos d'un dossier (récursif). Retourne murs, toits, nombre de photos et limites."""
     photos = sorted(p for p in Path(dossier).rglob("*") if p.suffix.lower() in EXTENSIONS)
     toutes: list[tuple[tuple[float, float, float], float]] = []
+    sols: list[tuple[tuple[float, float, float], float]] = []
     utilisees = 0
     for p in photos:
         try:
             c = couleurs_photo(p)
+            sol_c = couleurs_photo(p, k=3, zone="sol")
         except Exception:
             continue
         if c:
             utilisees += 1
             toutes.extend(c)
+            sols.extend(sol_c)
     murs_c = [(c, w) for c, w in toutes if _luminance(np.array(c)) >= 0.45]
     toits_c = [(c, w) for c, w in toutes if _luminance(np.array(c)) < 0.45]
     return {
         "photos": len(photos), "photos_utilisees": utilisees,
-        "murs": fusionner(murs_c, n_murs), "toits": fusionner(toits_c, n_toits),
+        "murs": fusionner(murs_c, n_murs), "toits": fusionner(toits_c, n_toits), "sol": fusionner(sols, 1, seuil_lab=25.0),
     }
 
 
@@ -162,6 +173,7 @@ def ecrire_suggestion(res: dict, lieu: str, chemin: Path) -> None:
         "[style]",
         "murs = [" + ", ".join(f'"{hex_couleur(c)}"' for c, _ in res["murs"]) + "]",
         "toits = [" + ", ".join(f'"{hex_couleur(c)}"' for c, _ in res["toits"]) + "]",
+    ] + ([f'sol = "{hex_couleur(res["sol"][0][0])}"  # couleur dominante du bas des photos (sol)'] if res.get("sol") else []) + [
         "",
     ]
     Path(chemin).write_text("\n".join(lignes), encoding="utf-8")

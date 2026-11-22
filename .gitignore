@@ -21,3 +21,6 @@ verif/godot/carte/
 # Photos de reference d autres auteurs : jamais dans le depot (seul INDEX.csv des licences peut l etre).
 references/*
 !references/INDEX.csv
+
+# Photos de reference (non redistribuables, seul INDEX.csv est versionnable)
+references/*/
