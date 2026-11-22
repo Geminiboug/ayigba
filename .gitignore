@@ -17,3 +17,7 @@ projects/*/logs/
 # Projet Godot de vérification : fichiers générés
 verif/godot/.godot/
 verif/godot/carte/
+
+# Photos de reference d autres auteurs : jamais dans le depot (seul INDEX.csv des licences peut l etre).
+references/*
+!references/INDEX.csv

@@ -55,6 +55,11 @@ def main(argv: list[str] | None = None) -> int:
     ctl.add_argument("--exclure-score", type=int, metavar="X",
                      help="écrit dans config.toml les identifiants de score >= X à exclure à la prochaine génération (rien n'est exclu sans cette option)")
 
+    pal = sub.add_parser("palette-photos", help="propose une palette de murs et de toits à partir de photos de référence (suggestion à relire, rien n'est appliqué)")
+    pal.add_argument("dossier", type=Path, help="dossier de photos (récursif)")
+    pal.add_argument("--lieu", default="lieu inconnu")
+    pal.add_argument("--sortie", type=Path, help="fichier .toml où écrire la suggestion")
+
     sub.add_parser("sources", help="liste les sources d'empreintes de bâtiments disponibles, avec leur licence")
     sub.add_parser("styles", help="liste les préréglages de style (couleurs, étages, rues revêtues)")
     sub.add_parser("etapes", help="liste les étapes du pipeline")
@@ -69,6 +74,17 @@ def main(argv: list[str] | None = None) -> int:
             for nom, st in sorted(style.PRESETS.items()):
                 print(f"  {nom:<20} {st.note}")
             print("Surcharges possibles dans [style] : sol, laterite, asphalte, trottoir, eau, murs, toits (couleurs [r, g, b] ou \"#rrggbb\"), coherence (0 à 1), taille_quartier_m.")
+        elif args.commande == "palette-photos":
+            from . import photos_palette as pp
+            res = pp.palette_du_lieu(args.dossier)
+            if res["photos_utilisees"] == 0:
+                raise LookupError(f"Aucune photo exploitable dans {args.dossier}")
+            print(f"{res['photos_utilisees']} photo(s) exploitée(s) sur {res['photos']}.")
+            for nom in ("murs", "toits"):
+                print(f"{nom} : " + "  ".join(f"{pp.hex_couleur(c)} ({w:.2f})" for c, w in res[nom]))
+            if args.sortie:
+                pp.ecrire_suggestion(res, args.lieu, args.sortie)
+                print(f"Suggestion écrite dans {args.sortie} (à relire avant de copier dans config.toml).")
         elif args.commande == "sources":
             from . import empreintes
             print("Sources d'empreintes disponibles (à activer dans config.toml : [empreintes] sources = [\"id\", ...]) :")
