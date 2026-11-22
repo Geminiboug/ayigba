@@ -36,7 +36,7 @@ Règles de travail : ne rien pousser sans demande d'Olympe ; pas de co-auteur da
 | 8 | Interface Tauri | à faire | |
 | 9 | IA de style | à faire | commencer par des règles et une classification |
 | 10 | Adaptateurs Unity et Unreal | **préparés, fichiers validés, NON TESTÉS dans les moteurs** | 18/11/2026. Validé sans moteur : validateur officiel Khronos (gltf-validator 2.0.0-dev.3.10) sur carte.glb de Cadjèhoun et d'Ouidah et sur leurs 126 et 144 zones : 0 erreur, 0 avertissement, 0 info, 0 conseil ; `tests/test_export_conformite.py` (indices 32 bits, valeurs finies, min/max, un maillage par couche, manifeste cohérent). Préparé : `adapters/unity` (import d'un bloc, `Runtime/AyigbaCarte.cs` zones à la demande), `adapters/unreal` (`importer`, `importer_zones`, étapes manuelles). Reste NON testé : compilation du C#, tout import réel dans Unity et Unreal, conversion de repère et d'échelle (sens de l'axe X sous Unity, centimètres sous Unreal), matériaux, collisions, chargement à la demande sous Unreal (non écrit). Aucune texture ni extension glTF requise ; primitives jusqu'à 147 021 sommets (indices 32 bits) |
-| 11 | Autres villes | **Ouidah fait** | créée par son seul nom, sans changer le code ; reste : Porto-Novo, Parakou |
+| 11 | Autres villes | **Ouidah et Porto-Novo faites** | créées par leur seul nom, sans changer le code. Porto-Novo (22/11/2026) : 8,9 km2, 20 841 bâtiments (161 générés), 964 routes (188 km), 1,07 million de triangles, accessibilité à pied 100 %, 0 erreur, 338 tests passent, 12 min 27 s dont 513 s pour l'étape secours (lente). Limites : relief 2.5D mesuré sur 28,3 % de la zone seulement ; bots Godot pas lancés sur Porto-Novo. Reste : Parakou |
 
 ## Résultats mesurés (17/11/2026, version 0.5)
 
@@ -96,10 +96,10 @@ Même entrée et même graine donnent les mêmes fichiers (test automatique). Au
 
 ## Prochaines tâches, dans l'ordre proposé
 
-1. **Carrefours dessinés et passages piétons peints.**
+1. ~~Carrefours dessinés et passages piétons peints~~ : FAIT en 0.6.0 (src/ayigba/carrefours.py). Reste : contrôle visuel dans Godot.
 2. **Contrôler les détections** : l'outil de tri existe (`ayigba controler-detections`, planche exemple dans `docs/images/`) ; reste à comparer sur le terrain ou sur images satellite les 20 plus suspects et un échantillon au hasard, pour savoir si le score trie bien, et d'en tirer un taux d'erreur mesuré.
 3. **Arbres** : les retirer aussi du relief (pas de donnée libre identifiée pour l'instant).
-4. **Bots hors des routes**, navmesh, vrai véhicule à roues.
+4. **Bots hors des routes**, navmesh, vrai véhicule à roues. Navmesh et bots hors routes : FAIT le 22/11/2026 (). Un navmesh est cuit par Godot à partir des collisions (rayon de 400 m autour du centre de Cadjèhoun, 5 à 6 s), des paires de points au hasard sont tirées sur ce navmesh, les bots suivent le chemin avec la physique. Résultat sur Cadjèhoun, 300 trajets reliés : piéton 293 sans défaut (119,7 km), 7 blocages, 0 chute ; gabarit voiture 299 sans défaut (130,4 km), 1 blocage, 0 chute. LIMITES : 169 à 177 paires tirées sur environ 470 ne sont pas reliées (probablement des toits plats et des îlots isolés : non vérifié) ; les 8 blocages disparaissent avec  (rayon du navmesh augmenté de 20 cm) : 300 trajets sur 300 sans défaut en piéton, aussi avec 0.4 ; ce sont donc des passages à peine plus larges que le bot (navmesh arrondi à la cellule de 0,4 m), pas des murs invisibles, mais la position exacte des 8 passages n'a pas été inspectée ; zone de 400 m seulement, graine fixe ; toujours pas de vrai véhicule à roues.
 5. **Budget mesuré en images par seconde** dans Godot, sur une machine modeste.
 6. **Interface Tauri** : carte, erreurs en rouge, rejeu d'un bot bloqué, validation des corrections.
 7. **Style par quartier** : règles puis classification d'images, sur les photos d'Olympe uniquement.

@@ -1,6 +1,6 @@
 extends SceneTree
 ## Bots dans le moteur : des personnages parcourent les routes de la carte avec la physique de Godot.
-##   Godot --headless --path verif/godot --script res://bots_routes.gd -- export=<dossier out/neutre> [routes=200] [bots=24] [gabarit=pieton|vehicule] [rapport=<fichier.json>]
+##   Godot --headless --path verif/godot --script res://bots_routes.gd -- export=<dossier out/neutre> [routes=200] [bots=24] [gabarit=pieton|vehicule] [mode=traversees|hors_routes] [trajets=200] [rayon=300] [rapport=<fichier.json>]
 ## La carte est chargée zone par zone avec l'adaptateur (res://ayigba_carte.gd), toutes zones chargées, collisions créées.
 ## Un bot « bloque » révèle un mur invisible ou un obstacle sur une route ; une « chute » révèle un trou.
 ## routes=0 : toutes les routes. Code de sortie 0 si aucun défaut, 1 sinon.
@@ -58,6 +58,11 @@ func _lancer() -> void:
 			pts.append(Vector3(x, float(q[2]) if q.size() > 2 else 0.0, z))   # q[2] : altitude du sol sous le point
 		if pts.size() >= 2:
 			choisies.append({"id": toutes[k]["id"], "points": pts})
+	if _arg("mode") == "hors_routes":
+		# bots hors des routes : un navmesh est cuit à partir des collisions de la carte, des trajets sont tirés entre
+		# points au hasard de ce navmesh, et les bots les suivent avec la physique. Un bot bloqué = le navmesh et la
+		# physique ne sont pas d'accord (mur invisible, marche, passage trop étroit). Une paire non reliée = zone isolée.
+		choisies = await _trajets_navmesh(boite, vehicule, int(_arg("trajets", "200")), float(_arg("rayon", "300")))
 	if _arg("mode") == "traversees":
 		# sortie de chaussée : du milieu de la rue jusque sur le bas-côté ou le trottoir, perpendiculairement à la rue
 		await physics_frame
@@ -86,6 +91,10 @@ func _lancer() -> void:
 					continue   # un mur borde la rue ici : ce n'est pas un test de bordure
 				choisies.append({"id": "traversee:" + String(r["id"]), "points": PackedVector3Array([milieu, but])})
 	_total_routes = choisies.size()
+	if _total_routes == 0:
+		print("ECHEC aucune route ou aucun trajet a parcourir")
+		quit(1)
+		return
 	var nb := clampi(int(_arg("bots", "24")), 1, 64)
 	Engine.time_scale = 8.0
 	Engine.max_physics_steps_per_frame = 64
@@ -115,6 +124,65 @@ func _lancer() -> void:
 		bot.call("demarrer")
 	_debut = Time.get_ticks_msec()
 	print("      %d bot(s) au gabarit %s sur %d route(s) (une route sur %d)" % [nb, "véhicule (1,8 m de large)" if vehicule else "piéton", _total_routes, pas])
+
+
+var _non_relies := 0
+var _paires_tirees := 0
+
+
+func _trajets_navmesh(boite: AABB, vehicule: bool, voulu: int, rayon: float) -> Array:
+	var nm := NavigationMesh.new()
+	nm.agent_radius = (0.9 if vehicule else 0.35) + float(_arg("marge", "0"))
+	nm.agent_height = 1.75
+	nm.agent_max_climb = 0.25
+	nm.agent_max_slope = 30.0
+	nm.cell_size = 0.4
+	nm.cell_height = 0.25
+	nm.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+	nm.geometry_collision_mask = 1
+	var centre := boite.get_center()
+	nm.filter_baking_aabb = AABB(Vector3(centre.x - rayon, boite.position.y - 5.0, centre.z - rayon), Vector3(rayon * 2.0, boite.size.y + 50.0, rayon * 2.0))
+	var source := NavigationMeshSourceGeometryData3D.new()
+	var t0 := Time.get_ticks_msec()
+	NavigationServer3D.parse_source_geometry_data(nm, source, root)
+	NavigationServer3D.bake_from_source_geometry_data(nm, source)
+	print("      navmesh cuit en %.1f s : %d polygone(s), zone de %.0f m de rayon" % [(Time.get_ticks_msec() - t0) / 1000.0, nm.get_polygon_count(), rayon])
+	if nm.get_polygon_count() == 0:
+		print("ECHEC navmesh vide")
+		return []
+	var carte_nav := root.get_world_3d().navigation_map
+	NavigationServer3D.map_set_cell_size(carte_nav, nm.cell_size)
+	NavigationServer3D.map_set_cell_height(carte_nav, nm.cell_height)
+	var region := NavigationServer3D.region_create()
+	NavigationServer3D.region_set_map(region, carte_nav)
+	NavigationServer3D.region_set_navigation_mesh(region, nm)
+	NavigationServer3D.region_set_enabled(region, true)
+	NavigationServer3D.set_active(true)
+	for _i in 30:
+		await physics_frame
+		await process_frame
+	await create_timer(1.0).timeout
+	print("      iteration carte=%d" % NavigationServer3D.map_get_iteration_id(carte_nav))
+	NavigationServer3D.map_force_update(carte_nav)
+	print("      carte nav : %d region(s), actif=%s, exemple %s" % [NavigationServer3D.map_get_regions(carte_nav).size(), NavigationServer3D.map_is_active(carte_nav), NavigationServer3D.map_get_random_point(carte_nav, 1, true)])
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20261122
+	var trajets: Array = []
+	var essais := 0
+	while trajets.size() < voulu and essais < voulu * 6:
+		essais += 1
+		var a := NavigationServer3D.map_get_random_point(carte_nav, 1, true)
+		var b := NavigationServer3D.map_get_random_point(carte_nav, 1, true)
+		if a.distance_to(b) < 15.0:
+			continue
+		_paires_tirees += 1
+		var chemin := NavigationServer3D.map_get_path(carte_nav, a, b, true)
+		if chemin.size() < 2 or chemin[chemin.size() - 1].distance_to(b) > 1.5:
+			_non_relies += 1
+			continue
+		trajets.append({"id": "navmesh:%d" % trajets.size(), "points": chemin})
+	print("      %d trajet(s) hors routes relié(s) sur %d paire(s) tirée(s), %d paire(s) non reliée(s)" % [trajets.size(), _paires_tirees, _non_relies])
+	return trajets
 
 
 func _process(_delta: float) -> bool:
