@@ -32,7 +32,7 @@ Nouveautés du 22/11/2026 (toutes facultatives et désactivées par défaut, les
 - **Textures** : `[textures] actif = true` ajoute un grain de matière aux murs, chaussées, trottoirs et sol.
 - **Classes de bâtiments** : `[style] classes = true` colore commerces, institutions, lieux de culte et industrie d'après leur type OSM ou le point d'intérêt qu'ils contiennent.
 - **Bots hors des routes** : `bots_routes.gd mode=hors_routes` (navmesh) dans Godot.
-- **Véhicule à roues** : `bots_routes.gd gabarit=roues` fait rouler un vrai véhicule (suspension, direction) ; à Cadjèhoun : 20 défauts sur 610 routes ; mesurés avec `analyse_defauts.gd`, 16 sont sur sol plat et dégagé, donc probablement dus à la conduite du bot et pas à la carte.
+- **Véhicule à roues** : `bots_routes.gd gabarit=roues` fait rouler un vrai véhicule (suspension, direction) ; à Cadjèhoun : 597 routes sur 610 sans défaut ; 13 blocages restent à expliquer (`analyse_defauts.gd`, `route=<id> trace=1`).
 - **Villes testées** : Cadjèhoun, Ouidah, Porto-Novo, Parakou.
 
 - **Styles régionaux et cohérence entre voisins** : préréglages (Afrique de l'Ouest, Europe tempérée, Andes, générique) choisis d'après le pays, et quartiers de couleurs cohérentes au lieu d'un tirage indépendant par bâtiment (`[style]` dans config.toml, `ayigba styles`). Ce sont des choix de style, pas des mesures.

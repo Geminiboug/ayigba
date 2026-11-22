@@ -4,6 +4,9 @@ extends VehicleBody3D
 ## Il révèle ce que la capsule ne voit pas : bosses et marches de la chaussée, pentes trop raides, virages trop serrés,
 ## passages plus étroits que le châssis. Défauts notés : « bloque » (n'avance plus, ou renversé) et « chute » (trou).
 
+var trace := false             # vrai : écrit la trajectoire (position, cap, vitesse, braquage, inclinaison) toutes les 0,25 s
+var _n := 0
+var _t := 0.0                  # secondes depuis le début de la route en cours
 var vitesse := 4.0           # m/s visés
 const DELAI_BLOCAGE := 5.0     # un véhicule met plus de temps à repartir qu'un piéton
 const BRAQUAGE_MAX := 0.6      # radians
@@ -61,6 +64,7 @@ func _suivante() -> void:
 	_p = 1
 	_meilleur = INF
 	_depuis = 0.0
+	_t = 0.0
 	engine_force = 0.0
 	steering = 0.0
 	linear_velocity = Vector3.ZERO
@@ -72,6 +76,10 @@ func _suivante() -> void:
 	var pts: PackedVector3Array = routes[_r]["points"]
 	var cap := Vector3(pts[1].x - pts[0].x, 0.0, pts[1].z - pts[0].z)
 	var depart := pts[0] + Vector3(0, 0.9, 0)
+	# le sol réel (collisions) peut ne pas être à l'altitude de la route : on pose le véhicule sur le sol le plus haut sous le point
+	var sol := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(pts[0] + Vector3(0, 6.0, 0), pts[0] + Vector3(0, -6.0, 0), 1))
+	if not sol.is_empty():
+		depart = sol["position"] + Vector3(0, 0.6, 0)
 	if cap.length() < 0.01:
 		cap = Vector3(0, 0, -1)
 	var b := Basis.looking_at(cap.normalized(), Vector3.UP)   # -Z du châssis vers le premier point
@@ -79,13 +87,14 @@ func _suivante() -> void:
 
 
 func _echec(genre: String) -> void:
-	echecs.append({"genre": genre, "route": routes[_r]["id"], "x": snappedf(global_position.x, 0.1), "y": snappedf(global_position.y, 0.1), "z": snappedf(global_position.z, 0.1)})
+	echecs.append({"genre": genre, "route": routes[_r]["id"], "x": snappedf(global_position.x, 0.1), "y": snappedf(global_position.y, 0.1), "z": snappedf(global_position.z, 0.1), "t": snappedf(_t, 0.1), "p": _p})
 	_suivante()
 
 
 func _physics_process(delta: float) -> void:
 	if fini or routes.is_empty() or _r < 0:
 		return
+	_t += delta
 	var pts: PackedVector3Array = routes[_r]["points"]
 	if _p >= pts.size():
 		routes_faites += 1
@@ -108,6 +117,10 @@ func _physics_process(delta: float) -> void:
 	engine_force = SENS_MOTEUR * clampf((cible - v) * 1800.0, -FORCE_MAX, FORCE_MAX)
 	var fait := Vector2(linear_velocity.x, linear_velocity.z).length() * delta
 	distance += fait
+	if trace:
+		_n += 1
+		if _n % 15 == 0:
+			print("TRACE p=%d/%d pos=(%.1f, %.1f, %.1f) d=%.1f cap=%.0f deg angle=%.2f vit=%.1f braq=%.2f force=%.0f haut=%.2f" % [_p, pts.size(), global_position.x, global_position.y, global_position.z, d, rad_to_deg(atan2(avant.x, -avant.z)), angle, v, steering, engine_force, global_transform.basis.y.y])
 	if d < _meilleur - 0.3:
 		_meilleur = d
 		_depuis = 0.0

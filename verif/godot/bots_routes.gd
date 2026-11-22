@@ -1,6 +1,6 @@
 extends SceneTree
 ## Bots dans le moteur : des personnages parcourent les routes de la carte avec la physique de Godot.
-##   Godot --headless --path verif/godot --script res://bots_routes.gd -- export=<dossier out/neutre> [routes=200] [bots=24] [gabarit=pieton|vehicule|roues] [vitesse=4] [mode=traversees|hors_routes] [trajets=200] [rayon=300] [rapport=<fichier.json>]
+##   Godot --headless --path verif/godot --script res://bots_routes.gd -- export=<dossier out/neutre> [routes=200] [bots=24] [gabarit=pieton|vehicule|roues] [vitesse=4] [route=<id>] [trace=1] [mode=traversees|hors_routes] [trajets=200] [rayon=300] [rapport=<fichier.json>]
 ## La carte est chargée zone par zone avec l'adaptateur (res://ayigba_carte.gd), toutes zones chargées, collisions créées.
 ## Un bot « bloque » révèle un mur invisible ou un obstacle sur une route ; une « chute » révèle un trou.
 ## routes=0 : toutes les routes. Code de sortie 0 si aucun défaut, 1 sinon.
@@ -59,6 +59,15 @@ func _lancer() -> void:
 			pts.append(Vector3(x, float(q[2]) if q.size() > 2 else 0.0, z))   # q[2] : altitude du sol sous le point
 		if pts.size() >= 2:
 			choisies.append({"id": toutes[k]["id"], "points": pts})
+	if _arg("route") != "":   # une seule route (par son identifiant), pour l'examiner
+		choisies = choisies.filter(func(r): return String(r["id"]) == _arg("route"))
+		if choisies.is_empty():   # la route peut ne pas être dans l'échantillon « une sur N »
+			for q in lu["routes"]:
+				if String(q["id"]) == _arg("route"):
+					var pts2 := PackedVector3Array()
+					for w in q["points"]:
+						pts2.append(Vector3(clampf(w[0], boite.position.x + MARGE_BORD, boite.end.x - MARGE_BORD), float(w[2]) if w.size() > 2 else 0.0, clampf(-w[1], boite.position.z + MARGE_BORD, boite.end.z - MARGE_BORD)))
+					choisies.append({"id": q["id"], "points": pts2})
 	if _arg("mode") == "hors_routes":
 		# bots hors des routes : un navmesh est cuit à partir des collisions de la carte, des trajets sont tirés entre
 		# points au hasard de ce navmesh, et les bots les suivent avec la physique. Un bot bloqué = le navmesh et la
@@ -112,6 +121,7 @@ func _lancer() -> void:
 				lot_r.append(choisies[k])
 			vh.set("routes", lot_r)
 			vh.set("vitesse", float(_arg("vitesse", "4")))
+			vh.set("trace", _arg("trace") == "1")
 			root.add_child(vh)
 			_bots.append(vh)
 			continue
