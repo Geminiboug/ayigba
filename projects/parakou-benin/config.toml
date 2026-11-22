@@ -1,0 +1,24 @@
+# Projet créé depuis le lieu : Parakou, Borgou, Bénin
+[ville]
+nom = "Parakou, Bénin"
+quartier = ""
+pays = ""
+
+[zone]
+# Rectangle en degrés WGS84 : ouest, sud, est, nord.
+bbox = [2.61417, 9.32654, 2.64148, 9.35349]
+
+[generation]
+# Même entrée + même graine = même carte.
+graine = 1
+style = "defaut"
+
+[style]
+# Préréglage régional : afrique_de_l_ouest (choisi d'après le pays « bj »). Voir `ayigba styles`.
+preset = "afrique_de_l_ouest"
+# 0 = chaque bâtiment tire sa couleur seul ; plus la valeur est haute, plus les voisins se ressemblent.
+coherence = 0.65
+
+[export]
+# "neutre" (glTF + GeoJSON).
+moteur = "neutre"

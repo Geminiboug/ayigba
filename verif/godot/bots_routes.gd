@@ -161,7 +161,12 @@ func _trajets_navmesh(boite: AABB, vehicule: bool, voulu: int, rayon: float) -> 
 	for _i in 30:
 		await physics_frame
 		await process_frame
-	await create_timer(1.0).timeout
+	# la carte de navigation se synchronise dans le serveur : attendre (jusqu'a 20 s) qu'un point au hasard soit valide
+	var attente := 0
+	while NavigationServer3D.map_get_random_point(carte_nav, 1, true) == Vector3.ZERO and attente < 200:
+		await create_timer(0.1).timeout
+		attente += 1
+	print("      carte de navigation prete apres %.1f s" % (attente * 0.1))
 	print("      iteration carte=%d" % NavigationServer3D.map_get_iteration_id(carte_nav))
 	NavigationServer3D.map_force_update(carte_nav)
 	print("      carte nav : %d region(s), actif=%s, exemple %s" % [NavigationServer3D.map_get_regions(carte_nav).size(), NavigationServer3D.map_is_active(carte_nav), NavigationServer3D.map_get_random_point(carte_nav, 1, true)])
