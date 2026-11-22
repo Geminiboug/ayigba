@@ -4,7 +4,7 @@ extends VehicleBody3D
 ## Il révèle ce que la capsule ne voit pas : bosses et marches de la chaussée, pentes trop raides, virages trop serrés,
 ## passages plus étroits que le châssis. Défauts notés : « bloque » (n'avance plus, ou renversé) et « chute » (trou).
 
-const VITESSE := 4.0           # m/s visés
+var vitesse := 4.0           # m/s visés
 const DELAI_BLOCAGE := 5.0     # un véhicule met plus de temps à repartir qu'un piéton
 const BRAQUAGE_MAX := 0.6      # radians
 const FORCE_MAX := 3500.0
@@ -104,7 +104,7 @@ func _physics_process(delta: float) -> void:
 	var angle := avant.signed_angle_to(vers.normalized(), Vector3.UP)   # positif : le point est à gauche
 	steering = clampf(angle, -BRAQUAGE_MAX, BRAQUAGE_MAX)
 	var v := linear_velocity.dot(avant)
-	var cible := VITESSE * (0.4 if absf(angle) > 0.6 else 1.0)
+	var cible := vitesse * (0.4 if absf(angle) > 0.6 else 1.0)
 	engine_force = SENS_MOTEUR * clampf((cible - v) * 1800.0, -FORCE_MAX, FORCE_MAX)
 	var fait := Vector2(linear_velocity.x, linear_velocity.z).length() * delta
 	distance += fait

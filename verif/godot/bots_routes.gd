@@ -1,6 +1,6 @@
 extends SceneTree
 ## Bots dans le moteur : des personnages parcourent les routes de la carte avec la physique de Godot.
-##   Godot --headless --path verif/godot --script res://bots_routes.gd -- export=<dossier out/neutre> [routes=200] [bots=24] [gabarit=pieton|vehicule|roues] [mode=traversees|hors_routes] [trajets=200] [rayon=300] [rapport=<fichier.json>]
+##   Godot --headless --path verif/godot --script res://bots_routes.gd -- export=<dossier out/neutre> [routes=200] [bots=24] [gabarit=pieton|vehicule|roues] [vitesse=4] [mode=traversees|hors_routes] [trajets=200] [rayon=300] [rapport=<fichier.json>]
 ## La carte est chargée zone par zone avec l'adaptateur (res://ayigba_carte.gd), toutes zones chargées, collisions créées.
 ## Un bot « bloque » révèle un mur invisible ou un obstacle sur une route ; une « chute » révèle un trou.
 ## routes=0 : toutes les routes. Code de sortie 0 si aucun défaut, 1 sinon.
@@ -111,6 +111,7 @@ func _lancer() -> void:
 			for k in range(b, choisies.size(), nb):
 				lot_r.append(choisies[k])
 			vh.set("routes", lot_r)
+			vh.set("vitesse", float(_arg("vitesse", "4")))
 			root.add_child(vh)
 			_bots.append(vh)
 			continue
