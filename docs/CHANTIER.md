@@ -27,7 +27,7 @@ Règles de travail : ne rien pousser sans demande d'Olympe ; pas de co-auteur da
 | N° | Étape | État | Détail |
 |---|---|---|---|
 | 1 | Squelette, configuration, journal, reprise | **fait** | |
-| 2 | Collecte et nettoyage | **fait : OpenStreetMap, relief Copernicus (plusieurs tuiles), Google Open Buildings 2.5D** | reste : Microsoft Building Footprints, images de rue |
+| 2 | Collecte et nettoyage | **fait : OpenStreetMap, relief Copernicus (plusieurs tuiles), Google Open Buildings 2.5D** | Microsoft Building Footprints : FAIT en 0.7.0 (`sources_empreintes/microsoft.py`, option `[empreintes] sources = ["microsoft"]`, licence CDLA Permissive 2.0) ; reste : images de rue (Mapillary, demande une clé gratuite d'Olympe) |
 | 3 | Génération de base | **fait, version simple** | relief (Copernicus 30 m), sol conforme drapé sur le relief, routes, trottoirs à plat, bâtiments posés sur le relief, auvents, eau à son niveau propre, décors ; densité de zems et sens de circulation exportés comme données ; toits à deux pentes pour une partie des petits bâtiments rectangulaires (version 0.6) ; reste : relief plus fin que 30 m, bordures de trottoir surélevées, carrefours dessinés, passages piétons peints, façades |
 | 4 | Tests par bots, correction, rapport | **fait** | contrôles de géométrie, accessibilité exacte, bots dans Godot sur toutes les routes au gabarit piéton et au gabarit voiture (1,8 m de large), comparaison avant/après et retour en arrière ; reste : navmesh, bots hors des routes, vrai véhicule à roues |
 | 5 | Génération de secours | **fait, première version** | routes isolées reliées ou retirées, îlots vides remplis, cours fermées comblées ; tout est marqué `genere` |
