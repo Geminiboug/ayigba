@@ -43,6 +43,7 @@ class Style:
     revetues_par_defaut: frozenset = frozenset({"motorway", "trunk", "primary", "secondary", "tertiary"})
     coherence: float = 0.0       # 0 = tirage indépendant par bâtiment (ancien comportement)
     taille_quartier_m: float = 150.0
+    classes: bool = False        # vrai : la couleur dépend aussi de la classe du bâtiment (règles ci-dessous)
     note: str = ""
 
     def murs_tries(self) -> tuple[Couleur, ...]:
@@ -157,7 +158,55 @@ def charger(config) -> Style:
     if tq < 20.0:
         raise ValueError("[style] taille_quartier_m doit être au moins 20")
     champs["taille_quartier_m"] = tq
+    champs["classes"] = bool(config.option("style", "classes", s.classes))
     return replace(s, **champs)
+
+
+# ------------------------------------------------------------------------------------------------ classes de bâtiments
+
+_CLASSES = {
+    "commerce": "commercial retail supermarket kiosk shop",
+    "industriel": "industrial warehouse factory manufacture storage_tank hangar service garage garages",
+    "religieux": "church mosque temple cathedral chapel synagogue shrine religious",
+    "institution": "school hospital university college kindergarten public civic government office clinic fire_station train_station hotel",
+}
+
+
+def classe_batiment(genre: str | None) -> str:
+    """Classe d'un bâtiment d'après la valeur OSM `building=*` : commerce, industriel, religieux, institution, sinon résidentiel.
+    C'est une règle de style : elle ne regarde que ce type, jamais la forme ni la couleur réelle."""
+    g = (genre or "").strip().lower()
+    for classe, mots in _CLASSES.items():
+        if g in mots.split():
+            return classe
+    return "residentiel"
+
+
+def _saturation(c: Couleur) -> float:
+    return max(c) - min(c)
+
+
+def _restreindre(palette: tuple, classe: str | None, objet: str) -> tuple:
+    """Sous-palette de la classe : institutions et commerces plus clairs, lieux de culte presque blancs, industrie en gris.
+    Palette triée de la plus sombre à la plus claire ; jamais vide."""
+    n = len(palette)
+    if classe in (None, "residentiel") or n < 3:
+        return palette
+    if objet == "murs":
+        if classe in ("institution", "commerce"):
+            sous = palette[n // 2:]
+        elif classe == "religieux":
+            sous = palette[-max(1, n // 4):]
+        else:
+            sous = tuple(sorted(sorted(palette, key=_saturation)[:max(2, n // 3)], key=_luminance))
+    else:
+        if classe == "industriel":
+            sous = tuple(sorted(sorted(palette, key=_saturation)[:max(2, n // 2)], key=_luminance))
+        elif classe == "religieux":
+            sous = palette[-max(1, n // 3):]
+        else:
+            return palette
+    return sous or palette
 
 
 # ---------------------------------------------------------------------------------------------------- cohérence spatiale
@@ -196,7 +245,11 @@ class Teinte:
         self._fm = champ(seed ^ 0x5A17, style.taille_quartier_m)
         self._ft = champ(seed ^ 0xC3B9, style.taille_quartier_m * 1.3)
 
-    def choisir(self, x: float, y: float, rng) -> tuple[Couleur, Couleur]:
+    def choisir(self, x: float, y: float, rng, genre: str | None = None) -> tuple[Couleur, Couleur]:
+        if self.style.classes:
+            classe = classe_batiment(genre)
+            murs, toits = _restreindre(self._murs, classe, "murs"), _restreindre(self._toits, classe, "toits")
+            return self._pick(murs, self._fm(x, y), rng), self._pick(toits, self._ft(x, y), rng)
         if self.style.coherence <= 0.0:
             return rng.choice(self.style.murs), rng.choice(self.style.toits)   # ancien comportement, mêmes tirages
         mur = self._pick(self._murs, self._fm(x, y), rng)

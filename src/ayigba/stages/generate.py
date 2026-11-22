@@ -179,7 +179,7 @@ def run(ctx) -> dict:
             height = _estimate_height(rng, geom.area, props.get("type", "yes"), style)
             source_h = "genere"
             estimated += 1
-        wall, roof = teinte.choisir(geom.centroid.x, geom.centroid.y, rng)
+        wall, roof = teinte.choisir(geom.centroid.x, geom.centroid.y, rng, props.get("type"))
         hex_mur, hex_toit = "#%02x%02x%02x" % tuple(round(v * 255) for v in wall), "#%02x%02x%02x" % tuple(round(v * 255) for v in roof)
         if props.get("type") != "roof":
             couleurs_murs.append(wall)

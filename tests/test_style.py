@@ -264,3 +264,28 @@ def test_murs_tries_croissent_en_luminance(nom):
     lum = [0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] for c in PRESETS[nom].murs_tries()]
     assert lum == sorted(lum)
     assert len(lum) == len(PRESETS[nom].murs)
+
+
+# ------------------------------------------------------------------------------------------------- 5. classes de bâtiments
+def test_classe_batiment():
+    from ayigba.style import classe_batiment
+    assert classe_batiment("mosque") == "religieux" and classe_batiment("warehouse") == "industriel"
+    assert classe_batiment("school") == "institution" and classe_batiment("retail") == "commerce"
+    assert classe_batiment("yes") == "residentiel" and classe_batiment(None) == "residentiel"
+
+
+def test_classes_actives_restreignent_les_couleurs_et_restent_reproductibles():
+    import random
+    from dataclasses import replace
+    from ayigba.style import AFRIQUE_DE_L_OUEST, Teinte, _luminance
+    s = replace(AFRIQUE_DE_L_OUEST, classes=True, coherence=0.5)
+    t = Teinte(s, 7)
+    claires = s.murs_tries()[len(s.murs) // 2:]
+    for i in range(30):
+        mur, _ = t.choisir(10.0 * i, 5.0, random.Random(i), "school")
+        assert mur in claires
+        assert t.choisir(3.0, 4.0, random.Random(i), "mosque") == t.choisir(3.0, 4.0, random.Random(i), "mosque")
+    assert min(_luminance(t.choisir(1.0, 1.0, random.Random(i), "mosque")[0]) for i in range(30)) >= _luminance(s.murs_tries()[-2])
+    # désactivées : même résultat qu'avant, quel que soit le genre
+    t0 = Teinte(AFRIQUE_DE_L_OUEST, 7)
+    assert t0.choisir(1.0, 1.0, random.Random(3), "school") == t0.choisir(1.0, 1.0, random.Random(3), "yes")
