@@ -60,6 +60,11 @@ def main(argv: list[str] | None = None) -> int:
     pal.add_argument("--lieu", default="lieu inconnu")
     pal.add_argument("--sortie", type=Path, help="fichier .toml où écrire la suggestion")
 
+    voir = sub.add_parser("voir", help="écrit reports/voir.html : la carte du projet, le rapport de qualité et les défauts, dans un fichier HTML autonome")
+    voir.add_argument("projet", type=Path)
+    voir.add_argument("--bots", type=Path, action="append", default=[], help="rapport JSON d un banc de bots Godot (bots_routes.gd rapport=...) ; répétable")
+    voir.add_argument("--sortie", type=Path)
+
     sub.add_parser("sources", help="liste les sources d'empreintes de bâtiments disponibles, avec leur licence")
     sub.add_parser("styles", help="liste les préréglages de style (couleurs, étages, rues revêtues)")
     sub.add_parser("etapes", help="liste les étapes du pipeline")
@@ -74,6 +79,9 @@ def main(argv: list[str] | None = None) -> int:
             for nom, st in sorted(style.PRESETS.items()):
                 print(f"  {nom:<20} {st.note}")
             print("Surcharges possibles dans [style] : sol, laterite, asphalte, trottoir, eau, murs, toits (couleurs [r, g, b] ou \"#rrggbb\"), coherence (0 à 1), taille_quartier_m.")
+        elif args.commande == "voir":
+            from . import voir
+            print(f"Visionneuse écrite : {voir.ecrire(args.projet, args.bots, args.sortie)}")
         elif args.commande == "palette-photos":
             from . import photos_palette as pp
             res = pp.palette_du_lieu(args.dossier)

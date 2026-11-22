@@ -86,6 +86,7 @@ python3 -m venv .venv
 
 # Contrôler les bâtiments détectés par IA (hors ligne, indices de suspicion, pas la vérité terrain)
 .venv/bin/ayigba controler-detections projects/ouidah-benin
+.venv/bin/ayigba voir projects/ouidah-benin                          # reports/voir.html : carte, rapport et défauts dans un fichier HTML
 # Facultatif : inscrire dans config.toml les détections de score >= 6 à exclure ; rien n'est exclu sans cette option,
 # et l'exclusion ne s'applique qu'à la prochaine génération (le nombre exclu est journalisé dans logs/decisions.jsonl)
 .venv/bin/ayigba controler-detections projects/ouidah-benin --exclure-score 6
