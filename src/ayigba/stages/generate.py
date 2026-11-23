@@ -232,7 +232,7 @@ def run(ctx) -> dict:
                 ridge = r
         if ridge is not None:
             pitched += 1
-        final_buildings.append((geom, {**props, "hauteur": height, "hauteur_source": source_h, "base": round(low - 0.3, 2), "sommet": round(top, 2),
+        final_buildings.append((geom, {**props, "hauteur": height, "hauteur_source": source_h, "base": round(low - 0.3, 2), "sommet": round(top, 2), "sommet_max": round(top + (ridge or 0.0), 2),
                                        "couleur_mur": hex_mur, "couleur_toit": hex_toit,
                                        **({"toit": "deux_pentes", "faitage_m": round(ridge, 2)} if ridge is not None else {})}))
     finish(bati, True, "volumes des bâtiments (toits plats ou à deux pentes), posés sur le relief")
