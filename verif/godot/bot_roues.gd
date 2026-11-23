@@ -7,6 +7,7 @@ extends VehicleBody3D
 var trace := false             # vrai : écrit la trajectoire (position, cap, vitesse, braquage, inclinaison) toutes les 0,25 s
 var _n := 0
 var _t := 0.0                  # secondes depuis le début de la route en cours
+var decalage := 0.0            # mètres dont le départ est avancé le long du premier tronçon (essai)
 var vitesse := 4.0           # m/s visés
 const DELAI_BLOCAGE := 5.0     # un véhicule met plus de temps à repartir qu'un piéton
 const BRAQUAGE_MAX := 0.6      # radians
@@ -77,8 +78,12 @@ func _suivante() -> void:
 	var pts: PackedVector3Array = routes[_r]["points"]
 	var cap := Vector3(pts[1].x - pts[0].x, 0.0, pts[1].z - pts[0].z)
 	var depart := pts[0] + Vector3(0, 0.9, 0)
+	var p0 := pts[0]
+	if decalage > 0.0 and cap.length() > decalage + 1.0:
+		p0 = pts[0] + cap.normalized() * decalage
+		depart = p0 + Vector3(0, 0.9, 0)
 	# le sol réel (collisions) peut ne pas être à l'altitude de la route : on pose le véhicule sur le sol le plus haut sous le point
-	var sol := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(pts[0] + Vector3(0, 6.0, 0), pts[0] + Vector3(0, -6.0, 0), 1))
+	var sol := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(p0 + Vector3(0, 6.0, 0), p0 + Vector3(0, -6.0, 0), 1))
 	if not sol.is_empty():
 		depart = sol["position"] + Vector3(0, 0.6, 0)
 	if cap.length() < 0.01:

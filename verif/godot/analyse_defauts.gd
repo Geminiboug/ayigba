@@ -16,9 +16,24 @@ func _initialize() -> void:
 	_lancer.call_deferred()
 
 
+const SOLS := ["terrain", "chaussees", "trottoirs", "berges"]
+
+
 func _sol(espace: PhysicsDirectSpaceState3D, x: float, y: float, z: float) -> float:
-	var r := espace.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(x, y + 4.0, z), Vector3(x, y - 8.0, z), 1))
-	return r["position"].y if not r.is_empty() else NAN
+	## Altitude du SOL seulement (terrain, chaussées, trottoirs, berges) : les toits et murs touchés par le rayon sont ignorés.
+	var exclus: Array[RID] = []
+	for i in 8:
+		var q := PhysicsRayQueryParameters3D.create(Vector3(x, y + 4.0, z), Vector3(x, y - 8.0, z), 1)
+		q.exclude = exclus
+		var r := espace.intersect_ray(q)
+		if r.is_empty():
+			return NAN
+		var corps = r["collider"]
+		var parent: Node = corps.get_parent() if corps is Node else null
+		if parent != null and String(parent.name) in SOLS:
+			return r["position"].y
+		exclus.append(r["rid"])
+	return NAN
 
 
 func _lancer() -> void:
