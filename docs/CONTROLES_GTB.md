@@ -13,7 +13,10 @@ prend le verrou `C:\gtb_local\verrou_fenetre` (dossier créé puis supprimé) et
 | Toits à quatre pans de l'Ararat, maison par maison | `gtb_toits.gd` | `ay_gtb_toits.ps1` | 2 min, fenêtre | 0 défaut sur 61 toits |
 | Chaussée sans sol ou encombrée | `tests/audit_chaussee.gd` du jeu | `ay_gtb_audit.ps1` | 5 min, fenêtre | 0 sans sol, 613 rues sur 1 073 |
 | Circulation (banc sans monde) | `tests/banc_circulation.gd` du jeu | `ay_gtb_circ.ps1` puis `verif/gtb_seuils_circulation.py` | 2 min, sans fenêtre | seuils respectés |
+| Sol sans collision sur toute la démo (le joueur tomberait sous la carte) | `gtb_sol.gd` | `ay_gtb_sol.ps1` | 15 min, fenêtre | 0 trou sur 62 500 points (100 stations de 250 m, grille de 10 m) |
 | Sens des feux | `tests/test_feux_sens.gd` du jeu | `ay_gtb_feux.ps1` | 2 min, fenêtre | OK : 150 boîtiers, 29 carrefours |
+
+Compilation de tous les scripts du jeu : `tests/test_compile_scripts.gd` (headless, 20 s), à lancer à chaque lot ; il échoue sur toute erreur de syntaxe.
 
 Modèles trop lourds et textures magenta : déjà contrôlés par le jeu (`tools/controle_assets.gd`, `controle_textures.gd`, `scan_textures_map.gd`).
 
