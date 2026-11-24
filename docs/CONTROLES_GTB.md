@@ -23,7 +23,9 @@ Le scan des passants contrôle aussi les véhicules de la circulation (groupe `v
 
 **Images par seconde** : `ay_gtb_fps.ps1` mesure les millisecondes par image à trois points (aérogare, Ararat, plage) ; référence dans
 `verif/gtb/base_fps.json` (moyenne de deux mesures, bruit de 4 à 9 %), régression au-delà de +15 %. La mesure n'a de sens que si aucun autre
-Godot ne tourne en même temps (un test sans fenêtre de la session du jeu a doublé les valeurs lors d'un essai).
+Godot ne tourne en même temps (un test sans fenêtre de la session du jeu a doublé les valeurs lors d'un essai). Les autres applications de la
+machine (montage vidéo, navigateur) faussent aussi la mesure : le 24/11/2026, trois essais ont donné jusqu'à 78 ms alors que la mesure propre de la
+session du jeu donnait 21 ms. Une alerte fps n'est donc à retenir que si elle se répète sur une machine au repos ; sinon la prendre comme du bruit.
 
 ## Lot terminé : un seul ordre
 
