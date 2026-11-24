@@ -34,3 +34,13 @@ def test_voir_sans_resultat(tmp_path):
     dossier = ecrire_projet(tmp_path / "vide", ville_de_base())
     with pytest.raises(LookupError):
         voir.ecrire(dossier)
+
+
+def test_points_controle(tmp_path):
+    from ayigba import points_controle
+    dossier = construire(tmp_path, ville_de_base())
+    f = points_controle.ecrire(dossier)
+    pts = json.loads(f.read_text(encoding="utf-8"))
+    assert pts and all({"id", "genre", "x", "y", "z", "mode"} <= set(p) for p in pts)
+    assert {p["mode"] for p in pts} <= {"sol", "toit"}
+    assert any(p["mode"] == "toit" for p in pts)

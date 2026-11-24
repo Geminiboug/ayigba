@@ -34,6 +34,7 @@ Nouveautés du 22/11/2026 (toutes facultatives et désactivées par défaut, les
 - **Bots hors des routes** : `bots_routes.gd mode=hors_routes` (navmesh) dans Godot.
 - **Véhicule à roues** : `bots_routes.gd gabarit=roues` fait rouler un vrai véhicule (suspension, direction) ; à Cadjèhoun : 606 routes sur 610 sans défaut, 2 épingles comptées à part, 2 défauts à examiner (une chute au bord de la carte, un passage étroit) ; outils `analyse_defauts.gd` et `route=<id> trace=1`.
 - **Villes testées** : Cadjèhoun, Ouidah, Porto-Novo, Parakou.
+- **Objets flottants ou enterrés** : `ayigba points-controle <projet>` puis `flottants.gd` dans Godot (rayons vers le sol) ; à Cadjèhoun, 16 objets sur 9 396 hors tolérance de 0,30 m.
 
 - **Styles régionaux et cohérence entre voisins** : préréglages (Afrique de l'Ouest, Europe tempérée, Andes, générique) choisis d'après le pays, et quartiers de couleurs cohérentes au lieu d'un tirage indépendant par bâtiment (`[style]` dans config.toml, `ayigba styles`). Ce sont des choix de style, pas des mesures.
 
@@ -132,6 +133,8 @@ Recopie à la main dans `[style]` ce que tu gardes. Les photos ne vont pas dans 
 ```bash
 .venv/bin/ayigba voir projects/ouidah-benin --bots rapport1.json --bots rapport2.json   # reports/voir.html, à ouvrir dans un navigateur
 godot --headless --path verif/godot --script res://bots_routes.gd -- export=/chemin/out/neutre mode=hors_routes rapport=rapport1.json
+# objets flottants ou enterrés (décors, toits) : d'abord .venv/bin/ayigba points-controle projects/ouidah-benin
+godot --headless --path verif/godot --script res://flottants.gd -- export=/chemin/out/neutre points=/chemin/reports/points_controle.json sortie=flottants.json
 ```
 
 Le contrôle écrit `reports/controle_detections.json` (indicateurs, 20 plus suspects avec lat, lon et lien de carte), `reports/controle_detections.txt`, la planche `reports/controle_detections.png` et les vignettes dans `reports/controle_detections/`.

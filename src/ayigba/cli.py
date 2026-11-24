@@ -65,6 +65,10 @@ def main(argv: list[str] | None = None) -> int:
     voir.add_argument("--bots", type=Path, action="append", default=[], help="rapport JSON d un banc de bots Godot (bots_routes.gd rapport=...) ; répétable")
     voir.add_argument("--sortie", type=Path)
 
+    pc = sub.add_parser("points-controle", help="écrit reports/points_controle.json : décors et toits avec leur altitude attendue, pour le scanner d'objets flottants de Godot (verif/godot/flottants.gd)")
+    pc.add_argument("projet", type=Path)
+    pc.add_argument("--sortie", type=Path)
+
     sub.add_parser("sources", help="liste les sources d'empreintes de bâtiments disponibles, avec leur licence")
     sub.add_parser("styles", help="liste les préréglages de style (couleurs, étages, rues revêtues)")
     sub.add_parser("etapes", help="liste les étapes du pipeline")
@@ -82,6 +86,10 @@ def main(argv: list[str] | None = None) -> int:
         elif args.commande == "voir":
             from . import voir
             print(f"Visionneuse écrite : {voir.ecrire(args.projet, args.bots, args.sortie)}")
+        elif args.commande == "points-controle":
+            from . import points_controle
+            f = points_controle.ecrire(args.projet, args.sortie)
+            print(f"Points de contrôle écrits : {f}")
         elif args.commande == "palette-photos":
             from . import photos_palette as pp
             res = pp.palette_du_lieu(args.dossier)
