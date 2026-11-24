@@ -16,7 +16,19 @@ prend le verrou `C:\gtb_local\verrou_fenetre` (dossier créé puis supprimé) et
 | Sol sans collision sur toute la démo (le joueur tomberait sous la carte) | `gtb_sol.gd` | `ay_gtb_sol.ps1` | 15 min, fenêtre | 0 trou sur 62 500 points (100 stations de 250 m, grille de 10 m) |
 | Sens des feux | `tests/test_feux_sens.gd` du jeu | `ay_gtb_feux.ps1` | 2 min, fenêtre | OK : 150 boîtiers, 29 carrefours |
 
-Compilation de tous les scripts du jeu : `tests/test_compile_scripts.gd` (headless, 20 s), à lancer à chaque lot ; il échoue sur toute erreur de syntaxe.
+Compilation de tous les scripts du jeu : `tests/test_compile_scripts.gd` (headless, 20 s), lanceur `ay_gtb_compile.ps1` ; il échoue sur toute erreur de syntaxe.
+
+Le scan des passants contrôle aussi les véhicules de la circulation (groupe `vehicules_circulation`) : sous le sol, sans sol, centre dans un solide
+(338 observations, 0 défaut le 24/11/2026).
+
+**Images par seconde** : `ay_gtb_fps.ps1` mesure les millisecondes par image à trois points (aérogare, Ararat, plage) ; référence dans
+`verif/gtb/base_fps.json` (moyenne de deux mesures, bruit de 4 à 9 %), régression au-delà de +15 %. La mesure n'a de sens que si aucun autre
+Godot ne tourne en même temps (un test sans fenêtre de la session du jeu a doublé les valeurs lors d'un essai).
+
+## Lot terminé : un seul ordre
+
+`python3 verif/gtb/lot_termine.py` (rapide, environ 15 min) ou `--complet` (ajoute chaussée et sol, environ 35 min de plus) relance tout et
+n'affiche que les régressions. Code de sortie 0 : rien à signaler ; 1 : au moins une. `--fps-base` réécrit la référence des images par seconde.
 
 Modèles trop lourds et textures magenta : déjà contrôlés par le jeu (`tools/controle_assets.gd`, `controle_textures.gd`, `scan_textures_map.gd`).
 

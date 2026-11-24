@@ -2,6 +2,7 @@ extends SceneTree
 ## Piétons et joueur dans un mur ou sous le sol, dans le VRAI monde de GTB (fenêtre obligatoire, verrou C:\gtb_local\verrou_fenetre).
 ## Ne modifie rien dans le jeu. Lancement :
 ##   GTB_DEMO=1 Godot --path C:\gtb_local\godot --resolution 960x540 --script C:/gtb_local/ay_gtb_pietons.gd -- sortie.json [balayages] [pause_s]
+## Les véhicules du groupe « vehicules_circulation » sont contrôlés de la même façon (sous le sol, sans sol, centre contre un solide).
 ## Chargement copié de tests/scan_textures_map.gd (scène principale, joueur, noeud « histoire », nouvelle partie, 50 s de rodage).
 ## À chaque balayage, pour chaque noeud du groupe « pnj » et pour le joueur :
 ##   - « sous_le_sol » : bas du corps plus bas que le sol (couche de collision 10, masque 512) de plus de 0,3 m ;
@@ -79,6 +80,9 @@ func _corps(z: Node) -> Array:
 	for n in get_nodes_in_group("pnj"):
 		if n is Node3D and (n as Node3D).is_visible_in_tree():
 			liste.append(n)
+	for n in get_nodes_in_group("vehicules_circulation"):   # véhicules de la circulation : sous le sol, sans sol, centre dans un solide
+		if n is Node3D and (n as Node3D).is_visible_in_tree():
+			liste.append(n)
 	return liste
 
 
@@ -90,7 +94,7 @@ func _balayer(z: Node) -> void:
 	for n in _corps(z):
 		var p: Vector3 = (n as Node3D).global_position
 		total_obs += 1
-		var nom := String(n.name)
+		var nom := String(n.name) + (" [vehicule]" if n.is_in_group("vehicules_circulation") else "")
 		if n.has_meta("assis"):
 			continue   # vendeur assis à un étal : immobile, contre la caisse de l'étal par construction (déclaré par le jeu)
 		var exclus: Array[RID] = []
@@ -158,7 +162,7 @@ func _sol_nu(espace: PhysicsDirectSpaceState3D, p: Vector3) -> Dictionary:
 
 func _ignore(c: Node) -> bool:
 	var chemin := String(c.get_path())
-	return chemin.contains("/Pietons") or chemin.contains("/Circulation") or c.is_in_group("pnj")
+	return chemin.contains("/Pietons") or chemin.contains("/Circulation") or c.is_in_group("pnj") or c.is_in_group("vehicules_circulation") or c.is_in_group("vehicules")
 
 
 func _noter(nom: String, genre: String, p: Vector3, detail: String) -> void:

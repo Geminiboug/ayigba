@@ -1,0 +1,33 @@
+# Projet : Cotonou, quartier Cadjèhoun et aéroport (premier quartier d'essai).
+[ville]
+nom = "Cotonou"
+quartier = "Cadjèhoun / aéroport"
+pays = "Bénin"
+
+[zone]
+# Rectangle en degrés WGS84 : ouest, sud, est, nord.
+bbox = [2.372, 6.346, 2.402, 6.366]
+
+[generation]
+# Même entrée + même graine = même carte.
+graine = 20261117
+style = "defaut"
+
+[export]
+# "neutre" (glTF + GeoJSON). Les adaptateurs par moteur viendront ensuite.
+moteur = "neutre"
+
+# ESSAI v2 : palette plus variee, ajustee a la main d'apres 71 photos Wikimedia Commons. Pas une mesure.
+# Murs : blancs casses, roses, ocre, beiges, jaune pale, bleu pale et vert pale de peinture, terre cuite, gris de beton.
+# Toits : tole grise, tole claire, tole rouillee, tuile, tole bleutee.
+[style]
+preset = "afrique_de_l_ouest"
+sol = "#b79a7c"
+laterite = "#b5805e"
+murs = ["#eee9de", "#e6e0d4", "#d8cfc0", "#d0c4b3", "#e9d9c0", "#efd9a6", "#e3c27a", "#cfa98d", "#c09a85", "#b9795a", "#aa9c8f", "#a0a6aa", "#b8cfd6", "#9fc3d6", "#b7cdb0", "#e0b9b0"]
+toits = ["#5e5a55", "#8a8a88", "#744f3b", "#4a3a32", "#a0a6aa", "#8d4a38", "#6d7d88"]
+coherence = 0.45
+taille_quartier_m = 90.0
+
+[textures]
+actif = true

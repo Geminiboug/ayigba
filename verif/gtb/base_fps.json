@@ -1,0 +1,4 @@
+{
+ "ms": {"aerogare": 23.9, "ararat": 38.4, "plage": 30.1},
+ "note": "moyenne de 2 mesures du 24/11/2026 (aerogare 22.97 et 24.83 ; ararat 39.25 et 37.60 ; plage 28.77 et 31.44), demo, 1280x720, vues aerogare/ararat/plage, machine d'Olympe (portable, RTX 2050) ; bruit entre deux mesures : 4 a 9 % ; seuil de regression +15 %"
+}
