@@ -6,7 +6,7 @@ extends SceneTree
 ## À chaque balayage, pour chaque noeud du groupe « pnj » et pour le joueur :
 ##   - « sous_le_sol » : bas du corps plus bas que le sol (couche de collision 10, masque 512) de plus de 0,3 m ;
 ##   - « sans_sol » : aucun sol sous le corps dans les 8 m (couche 10, sinon premier solide hors bâtiments et props) ;
-##   - « centre_dans_un_solide » (défaut réel, seuil donné par la session du jeu) : une sphère de 10 cm au centre du passant, à 0,5 m et à 1,2 m du pied, touche un solide du monde ;
+##   - « centre_dans_un_solide » (défaut réel, seuil donné par la session du jeu) : une sphère de 5 cm au centre du passant, à 0,5 m et à 1,2 m du pied, touche un solide du monde ;
 ##   - « effleurement » (pas un défaut) : une capsule de 0,25 m de rayon et 1,4 m de haut (bas à 0,3 m au-dessus du pied, pour ne pas toucher le sol)
 ##     recoupe un solide du monde (masque 1) autre que le sol et que les autres personnages.
 ## Les balayages sont espacés (défaut 4 balayages, 12 s) parce que les passants marchent ; un même passant n'est compté qu'une fois par type.
@@ -106,7 +106,7 @@ func _balayer(z: Node) -> void:
 		sq.collide_with_areas = false
 		# 1) le CENTRE du passant (sphère de 10 cm à 0,5 m et à 1,2 m du pied) : défaut réel, car le jeu évite le point central
 		var point := SphereShape3D.new()
-		point.radius = 0.1
+		point.radius = 0.05   # défaut réel = centre à moins de 5 cm d une paroi (seuil convenu avec la session du jeu)
 		var centre_pris := false
 		for h_ in [0.5, 1.2]:
 			var pq := PhysicsShapeQueryParameters3D.new()
