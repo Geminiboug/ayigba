@@ -8,6 +8,8 @@ extends SceneTree
 ##   bas = altitude du bas de sa boîte englobante dans le monde ; support = la plus haute des deux surfaces sous le bas (+0,5 m) :
 ##   le sol (couche de collision 10, masque 512) et le sommet d'un bâtiment (collisionneur sous un chemin contenant /bld_).
 ##   écart = bas - support. > tolérance : « flotte » ; bas sous le sol de plus que la tolérance : « enterre ».
+## Filtres (conseils de la session du jeu, 24/11/2026) : rayons depuis le bas de l'objet ; ignore les noeuds portant la méta « suspendu », ceux sous
+##   /bld_ ou /Lieu_ (intérieurs), et un objet dont le bas touche le haut d'un autre mesh du même parent (tête de mât sur son mât).
 ## Ne contrôle PAS les MultiMesh (arbres, props de props.gd : pas de noeud par instance), signalé comme limite dans le rapport.
 
 const MASQUE_SOL := 512   # couche 10
@@ -59,7 +61,7 @@ func _aabb_monde(n: MeshInstance3D) -> AABB:
 
 
 func _sol(espace: PhysicsDirectSpaceState3D, x: float, y: float, z: float) -> float:
-	var q := PhysicsRayQueryParameters3D.create(Vector3(x, y + 6.0, z), Vector3(x, y - 10.0, z), MASQUE_SOL)
+	var q := PhysicsRayQueryParameters3D.create(Vector3(x, y + 0.5, z), Vector3(x, y - 10.0, z), MASQUE_SOL)   # depuis le BAS de l'objet vers le bas : un abri ou un auvent au-dessus ne compte pas
 	var r := espace.intersect_ray(q)
 	return NAN if r.is_empty() else r["position"].y
 
@@ -80,6 +82,25 @@ func _toit_batiment(espace: PhysicsDirectSpaceState3D, x: float, y: float, z: fl
 	return NAN
 
 
+func _soutenu_par_voisin(mi: MeshInstance3D, b: AABB) -> bool:
+	## vrai s'il existe un autre MeshInstance3D du même parent dont le haut touche le bas de celui-ci (±0,3 m) avec recouvrement en x et z
+	var parent := mi.get_parent()
+	if parent == null:
+		return false
+	for f in parent.get_children():
+		if f == mi or not (f is MeshInstance3D) or (f as MeshInstance3D).mesh == null:
+			continue
+		var c := _aabb_monde(f as MeshInstance3D)
+		if absf((c.position.y + c.size.y) - b.position.y) > 0.3:
+			continue
+		if c.position.x > b.position.x + b.size.x or c.position.x + c.size.x < b.position.x:
+			continue
+		if c.position.z > b.position.z + b.size.z or c.position.z + c.size.z < b.position.z:
+			continue
+		return true
+	return false
+
+
 func _scanner(z: Node) -> void:
 	var lieux := z.get_node_or_null("Lieux")
 	var liste: Array = []
@@ -93,6 +114,11 @@ func _scanner(z: Node) -> void:
 		var mi := n as MeshInstance3D
 		if mi.mesh == null or not mi.is_visible_in_tree():
 			continue
+		if mi.has_meta("suspendu"):
+			continue   # pièce volontairement en l'air, marquée par le jeu (têtes de lampadaires, totem, auvent, affiches, cônes de paillotes)
+		var chemin := String(mi.get_path())
+		if chemin.contains("/bld_") or chemin.contains("/Lieu_"):
+			continue   # intérieurs et bâtiments
 		var b := _aabb_monde(mi)
 		if b.size.length() < 0.05:
 			continue
@@ -115,6 +141,8 @@ func _scanner(z: Node) -> void:
 			else:
 				continue
 		var ecart := bas - support
+		if ecart > tol and _soutenu_par_voisin(mi, b):
+			continue   # tête de mât, toile de parasol : une autre pièce de la même famille touche son bas
 		if ecart > tol or (not is_nan(sol) and bas < sol - tol):
 			var sens := "flotte" if ecart > tol else "enterre"
 			var e := ecart if ecart > tol else bas - sol
