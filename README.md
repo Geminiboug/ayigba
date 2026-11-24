@@ -152,6 +152,33 @@ godot --headless --path verif/godot --script res://verifier_carte.gd -- carte=/c
 godot --headless --path verif/godot --script res://bots_routes.gd -- export=/chemin/vers/out/neutre routes=0
 ```
 
+## Faire une démo en 10 minutes
+
+À préparer avant, parce que le premier téléchargement des données prend du temps (ensuite tout marche sans réseau) :
+
+```bash
+.venv/bin/pip install -e ".[dev]"
+.venv/bin/ayigba creer "Ouidah, Bénin" --rayon-km 1.5      # le nom d'un lieu suffit
+.venv/bin/ayigba generer projects/ouidah-benin             # télécharge, génère, teste, exporte
+.venv/bin/ayigba voir projects/ouidah-benin                # écrit reports/voir.html
+```
+
+Pendant la démo :
+
+1. **Du nom du lieu à la carte** : montre la commande `creer` et le résultat déjà généré (le téléchargement n'est pas à faire en direct).
+2. **`reports/voir.html`** : un fichier autonome, à ouvrir dans n'importe quel navigateur (carte vue de dessus, rapport de qualité, défauts). C'est le meilleur support à montrer, sans rien installer.
+3. **Changer le style** : modifier `preset` dans `[style]` de `config.toml` (voir `ayigba styles`), régénérer, comparer.
+4. **La carte dans un moteur** : ouvrir `out/neutre/carte.glb` dans Blender (Fichier > Importer > glTF), ou charger la carte dans Godot avec l'adaptateur (`adapters/godot/LISEZMOI.md`). Pour montrer un véhicule qui roule sur les routes : `bots_routes.gd` avec `gabarit=roues` (voir plus haut).
+
+À dire honnêtement pendant la démo :
+
+- Les couleurs sont des choix de style, pas des mesures de la réalité.
+- Le relief vient d'un modèle à 30 m de résolution ; les petits reliefs (talus, caniveaux) n'existent pas.
+- Les ponts sont rendus comme des remblais.
+- Le véhicule à roues réussit 99,5 % des routes sur quatre villes ; les blocages restants ne sont pas tous expliqués (voir `docs/CHANTIER.md`).
+- Seul Godot est testé de bout en bout ; Unity et Unreal n'ont pas été testés avec les textures.
+- Les bâtiments viennent d'OpenStreetMap (et de détections par IA contrôlées hors ligne) : rien n'est vérifié sur le terrain.
+
 ## Sources et licences des données
 
 Les données ne sont pas dans ce dépôt. Chaque carte générée est livrée avec un fichier `CREDITS.md` qui liste les sources et leurs mentions obligatoires. OpenStreetMap est sous licence ODbL : la mention « © les contributeurs d'OpenStreetMap » doit apparaître partout où la carte est montrée. Ce n'est pas un avis juridique.
