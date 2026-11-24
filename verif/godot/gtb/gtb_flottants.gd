@@ -8,12 +8,15 @@ extends SceneTree
 ##   bas = altitude du bas de sa boîte englobante dans le monde ; support = la plus haute des deux surfaces sous le bas (+0,5 m) :
 ##   le sol (couche de collision 10, masque 512) et le sommet d'un bâtiment (collisionneur sous un chemin contenant /bld_).
 ##   écart = bas - support. > tolérance : « flotte » ; bas sous le sol de plus que la tolérance : « enterre ».
+## Arguments : sortie.json [tolerance] [base_connus.json] ; base_connus.json = liste [{"famille","x","z","raison"}] des écarts examinés et acceptés.
 ## Filtres (conseils de la session du jeu, 24/11/2026) : rayons depuis le bas de l'objet ; ignore les noeuds portant la méta « suspendu », ceux sous
 ##   /bld_ ou /Lieu_ (intérieurs), et un objet dont le bas touche le haut d'un autre mesh du même parent (tête de mât sur son mât).
 ## Ne contrôle PAS les MultiMesh (arbres, props de props.gd : pas de noeud par instance), signalé comme limite dans le rapport.
 
 const MASQUE_SOL := 512   # couche 10
 var tol := 0.3
+var tol_enterre := 0.4   # le sable de l'estran descend vers la mer : de petits objets de plage sont légèrement sous le sol vu
+var base_connus: Array = []   # défauts déjà examinés et acceptés (famille, x, z) : ne comptent pas
 var sortie := "C:/gtb_local/gtb_flottants.json"
 var t := 0.0
 var tp := 0.0
@@ -27,6 +30,10 @@ func _initialize() -> void:
 		sortie = a[0]
 	if a.size() > 1:
 		tol = float(a[1])
+	if a.size() > 2 and FileAccess.file_exists(a[2]):
+		var lu = JSON.parse_string(FileAccess.get_file_as_string(a[2]))
+		if typeof(lu) == TYPE_ARRAY:
+			base_connus = lu
 	var ch := (load(ProjectSettings.get_setting("application/run/main_scene")) as PackedScene).instantiate()
 	root.add_child(ch)
 	current_scene = ch
@@ -101,6 +108,13 @@ func _soutenu_par_voisin(mi: MeshInstance3D, b: AABB) -> bool:
 	return false
 
 
+func _connu(famille: String, x: float, z: float) -> bool:
+	for k in base_connus:
+		if String(k.get("famille", "")) == famille and absf(float(k.get("x", 1e9)) - x) < 1.5 and absf(float(k.get("z", 1e9)) - z) < 1.5:
+			return true
+	return false
+
+
 func _scanner(z: Node) -> void:
 	var lieux := z.get_node_or_null("Lieux")
 	var liste: Array = []
@@ -110,6 +124,7 @@ func _scanner(z: Node) -> void:
 	var defauts: Array = []
 	var par_famille := {}
 	var sans_support := 0
+	var connus := 0
 	for n in liste:
 		var mi := n as MeshInstance3D
 		if mi.mesh == null or not mi.is_visible_in_tree():
@@ -143,13 +158,16 @@ func _scanner(z: Node) -> void:
 		var ecart := bas - support
 		if ecart > tol and _soutenu_par_voisin(mi, b):
 			continue   # tête de mât, toile de parasol : une autre pièce de la même famille touche son bas
-		if ecart > tol or (not is_nan(sol) and bas < sol - tol):
+		if ecart > tol or (not is_nan(sol) and bas < sol - tol_enterre):
 			var sens := "flotte" if ecart > tol else "enterre"
 			var e := ecart if ecart > tol else bas - sol
+			if _connu(famille, cx, cz):
+				connus += 1
+				continue
 			defauts.append({"noeud": String(mi.get_path()), "famille": famille, "x": snappedf(cx, 0.1), "y": snappedf(bas, 0.01), "z": snappedf(cz, 0.1), "ecart": snappedf(e, 0.01), "sens": sens, "sol": snappedf(sol, 0.01) if not is_nan(sol) else null, "toit_batiment": snappedf(toit, 0.01) if not is_nan(toit) else null})
 			par_famille[famille] = int(par_famille.get(famille, 0)) + 1
 	defauts.sort_custom(func(a, b): return absf(a["ecart"]) > absf(b["ecart"]))
-	print("GTB_FLOTTANTS %d MeshInstance3D sous Lieux, %d sans support trouvé, %d défaut(s) au-delà de %.2f m" % [liste.size(), sans_support, defauts.size(), tol])
+	print("GTB_FLOTTANTS %d MeshInstance3D sous Lieux, %d sans support trouvé, %d défaut(s) au-delà de %.2f m (%d connu(s) et acceptés ignorés)" % [liste.size(), sans_support, defauts.size(), tol, connus])
 	print("GTB_FLOTTANTS par famille : ", JSON.stringify(par_famille))
 	for d in defauts.slice(0, 25):
 		print("GTB_FLOTTANTS %-7s %-24s (%.1f, %.1f, %.1f) ecart %+.2f  %s" % [d["sens"], d["famille"], d["x"], d["y"], d["z"], d["ecart"], d["noeud"]])
