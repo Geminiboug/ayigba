@@ -9,6 +9,7 @@ extends SceneTree
 ##   - « centre_dans_un_solide » (défaut réel, seuil donné par la session du jeu) : une sphère de 5 cm au centre du passant, à 0,5 m et à 1,2 m du pied, touche un solide du monde ;
 ##   - « effleurement » (pas un défaut) : une capsule de 0,25 m de rayon et 1,4 m de haut (bas à 0,3 m au-dessus du pied, pour ne pas toucher le sol)
 ##     recoupe un solide du monde (masque 1) autre que le sol et que les autres personnages.
+## Arguments : sortie.json [balayages] [pause_s] [base_connus.json]. Les passants portant la méta « assis » sont ignorés.
 ## Les balayages sont espacés (défaut 4 balayages, 12 s) parce que les passants marchent ; un même passant n'est compté qu'une fois par type.
 const MASQUE_SOL := 512
 var sortie := "C:/gtb_local/gtb_pietons.json"
@@ -22,6 +23,7 @@ var prochain := 50.0
 var vus := {}
 var defauts: Array = []
 var total_obs := 0
+var base_connus: Array = []   # cas examinés et acceptés : [{"x","z","raison"}] (position à 1,5 m)
 
 
 func _initialize() -> void:
@@ -32,6 +34,10 @@ func _initialize() -> void:
 		balayages = int(a[1])
 	if a.size() > 2:
 		pause = float(a[2])
+	if a.size() > 3 and FileAccess.file_exists(a[3]):
+		var lu = JSON.parse_string(FileAccess.get_file_as_string(a[3]))
+		if typeof(lu) == TYPE_ARRAY:
+			base_connus = lu
 	var ch := (load(ProjectSettings.get_setting("application/run/main_scene")) as PackedScene).instantiate()
 	root.add_child(ch)
 	current_scene = ch
@@ -85,6 +91,8 @@ func _balayer(z: Node) -> void:
 		var p: Vector3 = (n as Node3D).global_position
 		total_obs += 1
 		var nom := String(n.name)
+		if n.has_meta("assis"):
+			continue   # vendeur assis à un étal : immobile, contre la caisse de l'étal par construction (déclaré par le jeu)
 		var exclus: Array[RID] = []
 		if n is CollisionObject3D:
 			exclus.append((n as CollisionObject3D).get_rid())
@@ -154,6 +162,9 @@ func _ignore(c: Node) -> bool:
 
 
 func _noter(nom: String, genre: String, p: Vector3, detail: String) -> void:
+	for k in base_connus:
+		if absf(float(k.get("x", 1e9)) - p.x) < 1.5 and absf(float(k.get("z", 1e9)) - p.z) < 1.5:
+			return
 	var cle := nom + "|" + genre
 	if vus.has(cle):
 		return
