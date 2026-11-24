@@ -6,7 +6,8 @@ extends SceneTree
 ## À chaque balayage, pour chaque noeud du groupe « pnj » et pour le joueur :
 ##   - « sous_le_sol » : bas du corps plus bas que le sol (couche de collision 10, masque 512) de plus de 0,3 m ;
 ##   - « sans_sol » : aucun sol sous le corps dans les 8 m (couche 10, sinon premier solide hors bâtiments et props) ;
-##   - « dans_un_mur » : une capsule de 0,25 m de rayon et 1,4 m de haut (bas à 0,3 m au-dessus du pied, pour ne pas toucher le sol)
+##   - « centre_dans_un_solide » (défaut réel, seuil donné par la session du jeu) : une sphère de 10 cm au centre du passant, à 0,5 m et à 1,2 m du pied, touche un solide du monde ;
+##   - « effleurement » (pas un défaut) : une capsule de 0,25 m de rayon et 1,4 m de haut (bas à 0,3 m au-dessus du pied, pour ne pas toucher le sol)
 ##     recoupe un solide du monde (masque 1) autre que le sol et que les autres personnages.
 ## Les balayages sont espacés (défaut 4 balayages, 12 s) parce que les passants marchent ; un même passant n'est compté qu'une fois par type.
 const MASQUE_SOL := 512
@@ -103,14 +104,32 @@ func _balayer(z: Node) -> void:
 		sq.collision_mask = 1
 		sq.exclude = exclus
 		sq.collide_with_areas = false
-		for h in espace.intersect_shape(sq, 8):
-			var c = h["collider"]
-			if c is Node:
-				var chemin := String((c as Node).get_path())
-				if chemin.contains("/Pietons") or chemin.contains("/Circulation") or (c as Node).is_in_group("pnj"):
-					continue
-				_noter(nom, "dans_un_mur", p, chemin)
+		# 1) le CENTRE du passant (sphère de 10 cm à 0,5 m et à 1,2 m du pied) : défaut réel, car le jeu évite le point central
+		var point := SphereShape3D.new()
+		point.radius = 0.1
+		var centre_pris := false
+		for h_ in [0.5, 1.2]:
+			var pq := PhysicsShapeQueryParameters3D.new()
+			pq.shape = point
+			pq.transform = Transform3D(Basis.IDENTITY, p + Vector3(0, h_, 0))
+			pq.collision_mask = 1
+			pq.exclude = exclus
+			pq.collide_with_areas = false
+			for h in espace.intersect_shape(pq, 8):
+				var c = h["collider"]
+				if c is Node and not _ignore(c as Node):
+					_noter(nom, "centre_dans_un_solide", p, "à %.1f m du pied : %s" % [h_, String((c as Node).get_path())])
+					centre_pris = true
+					break
+			if centre_pris:
 				break
+		# 2) la capsule de 0,25 m : simple effleurement (le passant longe un mur, un tronc ou un poteau), compté à part
+		if not centre_pris:
+			for h in espace.intersect_shape(sq, 8):
+				var c2 = h["collider"]
+				if c2 is Node and not _ignore(c2 as Node):
+					_noter(nom, "effleurement", p, String((c2 as Node).get_path()))
+					break
 
 
 func _sol_nu(espace: PhysicsDirectSpaceState3D, p: Vector3) -> Dictionary:
@@ -127,6 +146,11 @@ func _sol_nu(espace: PhysicsDirectSpaceState3D, p: Vector3) -> Dictionary:
 			continue
 		return r
 	return {}
+
+
+func _ignore(c: Node) -> bool:
+	var chemin := String(c.get_path())
+	return chemin.contains("/Pietons") or chemin.contains("/Circulation") or c.is_in_group("pnj")
 
 
 func _noter(nom: String, genre: String, p: Vector3, detail: String) -> void:
@@ -148,4 +172,4 @@ func _finir() -> void:
 	var f := FileAccess.open(sortie, FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify({"observations": total_obs, "balayages": fait_n, "par_genre": par, "defauts": defauts}, " "))
-	quit(0 if defauts.is_empty() else 1)
+	quit(0 if int(par.get("centre_dans_un_solide", 0)) == 0 and int(par.get("sous_le_sol", 0)) == 0 and int(par.get("sans_sol", 0)) == 0 else 1)   # les effleurements ne font pas échouer

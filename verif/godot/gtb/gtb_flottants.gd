@@ -164,7 +164,7 @@ func _scanner(z: Node) -> void:
 			if _connu(famille, cx, cz):
 				connus += 1
 				continue
-			defauts.append({"noeud": String(mi.get_path()), "famille": famille, "x": snappedf(cx, 0.1), "y": snappedf(bas, 0.01), "z": snappedf(cz, 0.1), "ecart": snappedf(e, 0.01), "sens": sens, "sol": snappedf(sol, 0.01) if not is_nan(sol) else null, "toit_batiment": snappedf(toit, 0.01) if not is_nan(toit) else null})
+			defauts.append({"noeud": String(mi.get_path()), "taille": [snappedf(b.size.x, 0.01), snappedf(b.size.y, 0.01), snappedf(b.size.z, 0.01)], "famille": famille, "x": snappedf(cx, 0.1), "y": snappedf(bas, 0.01), "z": snappedf(cz, 0.1), "ecart": snappedf(e, 0.01), "sens": sens, "sol": snappedf(sol, 0.01) if not is_nan(sol) else null, "toit_batiment": snappedf(toit, 0.01) if not is_nan(toit) else null})
 			par_famille[famille] = int(par_famille.get(famille, 0)) + 1
 	defauts.sort_custom(func(a, b): return absf(a["ecart"]) > absf(b["ecart"]))
 	print("GTB_FLOTTANTS %d MeshInstance3D sous Lieux, %d sans support trouvé, %d défaut(s) au-delà de %.2f m (%d connu(s) et acceptés ignorés)" % [liste.size(), sans_support, defauts.size(), tol, connus])
