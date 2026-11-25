@@ -50,3 +50,7 @@ Tout nouvel écart est une régression à examiner, pas à ajouter à la base sa
 Seuls sont contrôlés les MeshInstance3D sous `Lieux` (pas les arbres et props en MultiMesh), les passants du groupe `pnj`, les toits de l'Ararat,
 la zone de démo. Les validations des écarts viennent de la session du jeu, pas d'une vérification visuelle d'ayigba. Les scripts supposent la
 structure actuelle du jeu (noeuds `Lieux`, `Player`, `histoire`, `Partie`, couche de collision 10 pour le sol) : un changement de cette structure les casse.
+
+## Arrêt sans recul (25/11/2026, demande de la session du jeu)
+
+`verif/godot/gtb/gtb_arret_sans_recul.gd`, lanceur `verif/gtb/ay_gtb_arret.ps1` (avec fenêtre et verrou, environ 4 min). Zem et berline, lancés à 12 m/s puis freinés : le joueur qui relâche le frein 0,3 s après l'arrêt ne recule pas ; le joueur qui le tient 2 s recule ; un pilote automatique ne recule que s'il braque. 8/8 OK sur la copie 0.4.2. Pièges : le joueur doit réellement monter (`enter_vehicle`), sinon `couches_commandes.gd` relâche `brake` à chaque image ; ne pas charger `zone_aeroport.tscn` seule (le chargement ne se termine pas) ; avec 1 s de frein tenu la berline reculait parfois de moins de 0,3 m (mouvement lent à démarrer), d'où 2 s. `GTB_ARRET_RAPIDE=1` ne joue que la berline.
